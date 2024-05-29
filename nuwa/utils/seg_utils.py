@@ -6,7 +6,12 @@ import os.path as osp
 from PIL.Image import Resampling
 
 from rembg import new_session, remove
-from segment_anything import sam_model_registry, SamPredictor
+try:
+    from segment_anything import sam_model_registry, SamPredictor
+except ImportError:
+    print("Please install segment-anything: "
+          "pip install git+https://github.com/facebookresearch/segment-anything.git")
+    raise
 
 from .dmv_utils import plt_utils, utils_3d
 from .dmv_utils.backproject import generate_grid

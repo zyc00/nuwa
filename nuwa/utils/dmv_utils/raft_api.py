@@ -38,6 +38,11 @@ class RAFTAPIHelper:
     def get_instance(ckpt=None, small=False, iters=32, mixed_precision=False):
         if ckpt is None:
             ckpt = os.path.expanduser("~/.cache/raft-sintel.pth")
+            if not os.path.exists(ckpt):
+                os.system(f"wget "
+                          f"https://web.eecs.umich.edu/~szetor/media/DEVIL/weights/raft-sintel.pth "
+                          f"-O {ckpt}")
+
         if RAFTAPIHelper._model is None:
             model = setup_model(EasyDict({'model': ckpt, 'small': small,
                                           'iters': iters, 'mixed_precision': mixed_precision}))
