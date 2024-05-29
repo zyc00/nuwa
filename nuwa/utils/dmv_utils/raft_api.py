@@ -39,9 +39,8 @@ class RAFTAPIHelper:
         if ckpt is None:
             ckpt = os.path.expanduser("~/.cache/raft-sintel.pth")
             if not os.path.exists(ckpt):
-                os.system(f"wget "
-                          f"https://web.eecs.umich.edu/~szetor/media/DEVIL/weights/raft-sintel.pth "
-                          f"-O {ckpt}")
+                os.system(f"wget --no-check-certificate -O {ckpt} "
+                          f"https://web.eecs.umich.edu/~szetor/media/DEVIL/weights/raft-sintel.pth")
 
         if RAFTAPIHelper._model is None:
             model = setup_model(EasyDict({'model': ckpt, 'small': small,

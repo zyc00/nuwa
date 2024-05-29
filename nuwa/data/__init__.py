@@ -315,6 +315,24 @@ class NuwaDB:
         return ret
 
     def dump(self, out_json_path, copy_images_to=None, copy_masks_to=None):
+        if copy_images_to is not None:
+            os.makedirs(copy_images_to, exist_ok=True)
+            copy_images_to = os.path.abspath(copy_images_to)
+
+            for f in self.frames:
+                new_path = os.path.join(copy_images_to, os.path.basename(f.image_path))
+                shutil.copy2(f.image_path, new_path)
+                f.image_path = new_path
+
+        if copy_masks_to is not None:
+            os.makedirs(copy_masks_to, exist_ok=True)
+            copy_masks_to = os.path.abspath(copy_masks_to)
+
+            for f in self.frames:
+                new_path = os.path.join(copy_masks_to, os.path.basename(f.mask_path))
+                shutil.copy2(f.mask_path, new_path)
+                f.mask_path = new_path
+
         frames = [f.to_dict() for f in self.frames]
         for f in frames:
             f["file_path"] = os.path.relpath(
@@ -331,21 +349,11 @@ class NuwaDB:
         with open(out_json_path + ".txt", "w") as outfile:
             outfile.write(f"{os.path.basename(out_json_path)}")
 
-        if copy_images_to is not None:
-            os.makedirs(copy_images_to, exist_ok=True)
-            for f in self.frames:
-                shutil.copy2(f.image_path, os.path.join(copy_images_to, os.path.basename(f.image_path)))
-
-        if copy_masks_to is not None:
-            os.makedirs(copy_masks_to, exist_ok=True)
-            for f in self.frames:
-                shutil.copy2(f.mask_path, os.path.join(copy_masks_to, os.path.basename(f.mask_path)))
-
     def calculate_object_mask(
             self,
             save_dir,
             reduce_factor=2,
-            shrink=-0.02,
+            shrink=0.02,
             sam_ckpt_path=None,
             adjust_cameras=True,
             copy_org=True
@@ -379,10 +387,10 @@ class NuwaDB:
                 xmin, xmax = fg_pixels[:, 0].min(), fg_pixels[:, 0].max()
                 ymin, ymax = fg_pixels[:, 1].min(), fg_pixels[:, 1].max()
                 w, h = xmax - xmin, ymax - ymin
-                xmin = int(xmin + w * shrink)
-                xmax = int(xmax - w * shrink)
-                ymin = int(ymin + h * shrink)
-                ymax = int(ymax - h * shrink)
+                xmin = int(xmin - w * shrink)
+                xmax = int(xmax + w * shrink)
+                ymin = int(ymin - h * shrink)
+                ymax = int(ymax + h * shrink)
                 bbox = xmin, ymin, xmax, ymax
                 bbox = [int(x * reduce_factor) for x in bbox]
                 mask = SAMAPI.segment_api(np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path)
@@ -406,19 +414,23 @@ class NuwaDB:
             camera_poses = scene_carving(masks, ks, camera_poses)
             images, ks, masks = crop_images(images, masks, ks)
 
+            h, w = images[0].shape[:2]
+
             # dump images
             for i, img in enumerate(images):
                 Image.fromarray(img).save(os.path.join(save_dir, f"{i:06d}.png"))
 
             # update info
-            for i, f in enumerate(self.frames):
-                assert f.camera.to_dict()["camera_param_model"] == "PINHOLE"
-                f.pose = camera_poses[i]
-                f.image_path = os.path.join(save_dir, f"{i:06d}.png")
-                f.camera.fx = ks[i][0, 0]
-                f.camera.fy = ks[i][1, 1]
-                f.camera.cx = ks[i][0, 2]
-                f.camera.cy = ks[i][1, 2]
+            for i in range(len(self.frames)):
+                assert self.frames[i].camera.to_dict()["camera_param_model"] == "PINHOLE"
+                self.frames[i].pose = camera_poses[i]
+                self.frames[i].image_path = os.path.join(save_dir, f"{i:06d}.png")
+                self.frames[i].camera.w = w
+                self.frames[i].camera.h = h
+                self.frames[i].camera.fx = ks[i][0, 0]
+                self.frames[i].camera.fy = ks[i][1, 1]
+                self.frames[i].camera.cx = ks[i][0, 2]
+                self.frames[i].camera.cy = ks[i][1, 2]
 
         for i, mask in enumerate(masks):
             mask_path = os.path.join(save_dir, f"{i:06d}_mask.png")
