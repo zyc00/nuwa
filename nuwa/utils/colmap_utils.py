@@ -23,6 +23,7 @@ def run_colmap(
 
     db = os.path.join(out_dir, "database.db")
     sparse = os.path.join(out_dir, "sparse")
+    os.makedirs(sparse, exist_ok=False)
 
     cache_dir = os.path.expanduser(f"~/.cache/colmap")
     os.makedirs(cache_dir, exist_ok=True)
@@ -45,7 +46,7 @@ def run_colmap(
     do_system((f"{colmap_binary}", f"{matcher}_matcher",
                f"--SiftMatching.guided_matching=true",
                f"--SiftMatching.use_gpu={with_cuda}",
-               f"--SequentialMatching.vocab_tree_path={vocab_path}"
+               f"--SequentialMatching.vocab_tree_path={vocab_path}",
                f"--SequentialMatching.loop_detection=true",
                f"--database_path={db}"), verbose)
 

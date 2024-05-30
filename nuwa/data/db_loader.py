@@ -309,5 +309,5 @@ def from_video(
         colmap_binary=colmap_binary,
         hloc_max_keypoints=hloc_max_keypoints,
         hloc_use_pixsfm=hloc_use_pixsfm,
-        verbose=False
+        verbose=verbose
     )
