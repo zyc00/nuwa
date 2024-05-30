@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nuwa',
-    version='0.0.14',
+    version='0.0.15',
     description='',
     author='Xiaoshuai Jet Zhang',
     author_email='jetgabr@gmail.com',
@@ -17,7 +17,6 @@ setup(
         'tqdm>=4.0.0',
         'torch>=2.0.0',
         'torchvision>=0.16.0',
-        'dl_ext==1.3.4',
         'easydict>=1.0',
     ],
     classifiers=[

@@ -1,5 +1,9 @@
 # If you do not need pixsfm (most users do not need this)
-# skip this file and modify the final lines of requirements.txt
+# skip this file
+
+# Install dependencies
+pip install -r requirements.txt
+
 
 # ceres-solver-2.1.0
 conda deactivate
@@ -30,7 +34,7 @@ cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=native
 ninja && sudo ninja install
 
 
-# pip dependencies
+# additional pip dependencies
 pip install git+https://github.com/colmap/pycolmap.git@v0.4.0
 pip install git+https://github.com/cvg/pyceres@v1.0
 pip install git+https://github.com/cvg/Hierarchical-Localization.git@988dd3a68b4d7def44c2870c9c3fd2069b037f64

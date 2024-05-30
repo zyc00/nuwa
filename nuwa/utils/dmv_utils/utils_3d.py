@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from dl_ext.vision_ext.datasets.kitti.structures import Calibration
 
 
 def cart_to_hom(pts):
@@ -28,7 +27,6 @@ def canonical_to_camera(pts, pose):
     """
     :param pts: Nx3
     :param pose: 4x4
-    :param calib:Calibration
     :return:
     """
     pts = cart_to_hom(pts)
@@ -403,9 +401,8 @@ def voxel_iou(pred_, gt_):
 
 
 def rect_to_img(K, pts_rect):
-
     pts_2d_hom = pts_rect @ K.T
-    pts_img = Calibration.hom_to_cart(pts_2d_hom)
+    pts_img = hom_to_cart(pts_2d_hom)
     return pts_img
 
 
