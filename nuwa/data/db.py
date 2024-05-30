@@ -107,8 +107,11 @@ class NuwaDB:
                 bbox = [int(x * reduce_factor) for x in bbox]
                 mask = SAMAPI.segment_api(np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path)
                 retval, labels, stats, cent = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
-                maxcomp = np.argmax(stats[1:, 4]) + 1
-                mask = (labels == maxcomp)
+                try:
+                    maxcomp = np.argmax(stats[1:, 4]) + 1
+                    mask = (labels == maxcomp)
+                except ValueError:
+                    mask = np.ones_like(mask)
 
             images.append(np.array(img))
             masks.append(mask)
