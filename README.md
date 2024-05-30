@@ -1,5 +1,28 @@
 # nuwa
 
+## Get started
+
+Installation:
+```bash
+pip install git+https://github.com/jetd1/nuwa.git
+
+# (optional) to use segmentation
+pip install git+https://github.com/facebookresearch/segment-anything.git
+```
+
+Demo:
+```python
+import nuwa
+
+db = nuwa.from_image_folder(img_dir)
+# db = nuwa.from_video(video_dir, out_img_dir)
+# db = nuwa.from_colmap(img_dir, colmap_dir)
+# db = nuwa.from_polycam(polycam_dir)
+
+masks = db.calculate_object_mask(mask_save_dir)
+db.dump("db.json")
+```
+
 ## Nuwa metadata format
 
 Example:

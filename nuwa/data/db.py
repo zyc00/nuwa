@@ -150,3 +150,6 @@ class NuwaDB:
             self.frames[i].mask_path = mask_path
 
         return masks
+
+    def undistort_images(self):
+        raise NotImplementedError
