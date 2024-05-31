@@ -15,6 +15,8 @@ class NuwaDB:
     source: str = ""
     frames: List[Frame] = []
 
+    _colmap_dir = ""
+
     def get_up(self):
         up = np.zeros(3)
         for f in self.frames:
@@ -156,3 +158,45 @@ class NuwaDB:
 
     def undistort_images(self):
         raise NotImplementedError
+
+    def export_3dgs(self, out_dir):
+        """
+        Export data to 3DGS format
+
+        <location>
+        |---images
+        |   |---<image 0>
+        |   |---<image 1>
+        |   |---...
+        |---sparse
+            |---0
+                |---cameras.bin
+                |---images.bin
+                |---points3D.bin
+
+        :param out_dir:
+        :return: None
+        """
+
+        if self._colmap_dir == "":
+            raise NotImplementedError("db is not imported from colmap")
+
+        if self.frames[0].mask_path != "":
+            raise NotImplementedError("export is not supported after masking")
+
+        if not os.path.exists(self._colmap_dir):
+            raise FileNotFoundError(f"colmap dir {self._colmap_dir} not found")
+
+        img_dir = os.path.join(out_dir, "images")
+        sparse_dir = os.path.join(out_dir, "sparse")
+
+        os.makedirs(out_dir, exist_ok=True)
+        os.makedirs(img_dir, exist_ok=True)
+        os.makedirs(sparse_dir, exist_ok=True)
+
+        # copy images
+        for i, f in enumerate(self.frames):
+            shutil.copy2(f.image_path, img_dir)
+
+        # copy sparse
+        shutil.copytree(self._colmap_dir, os.path.join(sparse_dir, "0"))

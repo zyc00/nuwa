@@ -113,6 +113,7 @@ def from_colmap(
     ret = NuwaDB()
     ret.frames = sorted(frames, key=lambda x: x.image_path)
     ret.source = "colmap"
+    ret._colmap_dir = colmap_dir
     return ret
 
 
