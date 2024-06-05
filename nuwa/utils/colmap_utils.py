@@ -11,7 +11,7 @@ def run_colmap(
         out_dir,
         matcher="exhaustive",
         camera_model="OPENCV",
-        heuristics="",
+        heuristics="\"\"",
         colmap_binary="colmap",
         single_camera=True,
         verbose=False

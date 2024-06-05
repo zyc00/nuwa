@@ -65,7 +65,8 @@ class NuwaDB:
 
     def calculate_object_mask(
             self,
-            save_dir,
+            mask_save_dir,
+            masked_image_save_dir,
             reduce_factor=2,
             shrink=0.02,
             sam_ckpt_path=None,
@@ -75,8 +76,11 @@ class NuwaDB:
         from nuwa.utils.seg_utils import segment_img, sam, scene_carving, crop_images, SAMAPI
         from nuwa.utils.dmv_utils import raft_api
 
-        os.makedirs(save_dir, exist_ok=True)
-        save_dir = os.path.abspath(save_dir)
+        os.makedirs(mask_save_dir, exist_ok=True)
+        os.makedirs(masked_image_save_dir, exist_ok=True)
+
+        mask_save_dir = os.path.abspath(mask_save_dir)
+        masked_image_save_dir = os.path.abspath(masked_image_save_dir)
 
         masks = []
         images = []
@@ -120,9 +124,19 @@ class NuwaDB:
 
         if copy_org:
             for i, f in enumerate(self.frames):
-                new_path = os.path.join(save_dir, f"{i:06d}_org.png")
-                shutil.copy2(f.org_path, new_path)
+                # TODO: masked_org_image_path
+                new_path = os.path.join(masked_image_save_dir, os.path.basename(f.org_path))
+                old_image = Image.open(f.org_path)
+                new_image = Image.new("RGBA", old_image.size, (0, 0, 0, 0))
+                new_image.paste(old_image, mask=Image.fromarray(masks[i]))
+                new_image.save(new_path)
                 f.org_path = new_path
+
+                base_name = os.path.basename(f.org_path).split(".")[0]
+                mask_path = os.path.join(mask_save_dir, f"{base_name}_mask.png")
+                Image.fromarray(masks[i]).save(mask_path)
+                # TODO: save org_mask
+
 
         if adjust_cameras:
             masks = np.array(masks)
@@ -135,13 +149,13 @@ class NuwaDB:
 
             # dump images
             for i, img in enumerate(images):
-                Image.fromarray(img).save(os.path.join(save_dir, f"{i:06d}.png"))
+                Image.fromarray(img).save(os.path.join(masked_image_save_dir, f"{i:06d}.png"))
 
             # update info
             for i in range(len(self.frames)):
                 assert self.frames[i].camera.to_dict()["camera_param_model"] == "PINHOLE"
                 self.frames[i].pose = camera_poses[i]
-                self.frames[i].image_path = os.path.join(save_dir, f"{i:06d}.png")
+                self.frames[i].image_path = os.path.join(masked_image_save_dir, f"{i:06d}.png")
                 self.frames[i].camera.w = w
                 self.frames[i].camera.h = h
                 self.frames[i].camera.fx = ks[i][0, 0]
@@ -150,7 +164,7 @@ class NuwaDB:
                 self.frames[i].camera.cy = ks[i][1, 2]
 
         for i, mask in enumerate(masks):
-            mask_path = os.path.join(save_dir, f"{i:06d}_mask.png")
+            mask_path = os.path.join(mask_save_dir, f"{i:06d}_mask.png")
             Image.fromarray(mask).save(mask_path)
             self.frames[i].mask_path = mask_path
 

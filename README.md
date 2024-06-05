@@ -19,7 +19,7 @@ db = nuwa.from_image_folder(img_dir)
 # db = nuwa.from_colmap(img_dir, colmap_dir)
 # db = nuwa.from_polycam(polycam_dir)
 
-masks = db.calculate_object_mask(mask_save_dir)
+masks = db.calculate_object_mask(mask_save_dir, masked_image_save_dir)
 db.dump("db.json")
 ```
 
