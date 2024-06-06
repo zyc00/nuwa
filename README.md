@@ -11,6 +11,15 @@ pip install git+https://github.com/facebookresearch/segment-anything.git
 ```
 
 Demo:
+```bash
+nuwa -v VIDEO_PATH -o OUT_DIR --fps 30
+nuwa -i IMAGE_DIR -o OUT_DIR
+
+# For all options:
+nuwa -h
+```
+
+
 ```python
 import nuwa
 
