@@ -1,24 +1,33 @@
 # nuwa
 
+Nuwa is a Python library for pre-processing images and videos for 3D reconstruction and generation pipelines. It provides a simple interface to load images or videos, estimate camera parameters, calculate object masks, and save the results in a structured format (NuwaDB).
+
+
 ## Get started
 
-Installation:
+⚙️ Installation
+
 ```bash
 pip install git+https://github.com/jetd1/nuwa.git
 
-# (optional) to use segmentation
+# (optional) if you want to use segmentation
 pip install git+https://github.com/facebookresearch/segment-anything.git
 ```
 
-Demo:
+🧑‍💻 CLI
+
 ```bash
+# To process a video:
 nuwa -v VIDEO_PATH -o OUT_DIR --fps 30
+
+# To process a folder of images:
 nuwa -i IMAGE_DIR -o OUT_DIR
 
-# For all options:
+# To view all options:
 nuwa -h
 ```
 
+🐍 Python
 
 ```python
 import nuwa
@@ -32,19 +41,21 @@ masks = db.calculate_object_mask(mask_save_dir, masked_image_save_dir)
 db.dump("db.json")
 ```
 
-## Nuwa metadata format
+## Nuwa metadata format (NuwaDB)
 
 Example:
 
-```
+```json
 {
-  "source": "colmap",                      // source of the data, choices [colmap, blender]
+  "source": "colmap",                      // source of the data, choices [colmap, polycam]
   
   "up": [                                  // up vector of the scene
     0.018489610893192888,
     0.2981818762436387,
     -0.7178426463982863
   ],
+  
+  "camera_angle_x": 0.6528299784,          // (Optional, NOT recommended) global camera angle x, if this exists, focal parameters (x and y) in frames are ignored  
   
   "frames": [                              // list of frames
     {                                      // frame 1
