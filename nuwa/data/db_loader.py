@@ -159,6 +159,8 @@ def from_polycam(polycam_dir):
     ret = NuwaDB()
     ret.frames = sorted(frames, key=lambda x: x.image_path)
     ret.source = "polycam"
+    # TODO: up for polycam
+
     return ret
 
 

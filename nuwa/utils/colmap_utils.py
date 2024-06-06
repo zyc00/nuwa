@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from copy import deepcopy
 from pathlib import Path
 
@@ -17,6 +18,8 @@ def run_colmap(
         loop_detection=True,
         verbose=False
 ):
+    start_time = time.time()
+
     with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA"'))
     single_camera = int(single_camera)
 
@@ -68,6 +71,8 @@ def run_colmap(
                f"--output_path={sparse}/0",
                f"--output_type=TXT"), verbose)
 
+    print(f"colmap finished in {time.time() - start_time:.2f} seconds")
+
 
 def run_hloc(
         image_dir,
@@ -81,6 +86,8 @@ def run_hloc(
         use_pixsfm=False,
         verbose=False
 ):
+    start_time = time.time()
+
     try:
         from hloc import (
             extract_features,
@@ -196,6 +203,8 @@ def run_hloc(
 
     model.write(str(cameras))
     model.write_text(str(cameras))
+
+    print(f"hloc finished in {time.time() - start_time:.2f} seconds")
 
 
 def colmap_convert_model(camera_dir, out_dir=None, colmap_binary="colmap", verbose=False):

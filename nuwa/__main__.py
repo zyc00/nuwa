@@ -1,49 +1,48 @@
 from nuwa import from_image_folder, from_video
 
 
-def get_args():
-    import argparse
-    parser = argparse.ArgumentParser(description="Nuwa: 3D Reconstruction Pipeline")
-    parser.add_argument("--video-path", "-v", type=str, default="",
-                        help="Path to the video file")
-    parser.add_argument("--image-dir", "-i", type=str, default="",
-                        help="Path to the images / to expand the frames")
-    parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
-                        help="Output directory")
-
-    parser.add_argument("--fps", type=int, default=3, help="FPS for video inputs")
-
-    parser.add_argument("--camera-model", type=str, default="OPENCV",
-                        help="Camera model")
-    parser.add_argument("--camera-heuristics", "-c", type=str, default=None,
-                        help="Camera heuristics")
-    parser.add_argument("--colmap-binary", type=str, default="colmap",
-                        help="Path to the COLMAP binary")
-    parser.add_argument("--colmap-dir", type=str, default="",
-                        help="Path to the COLMAP outputs")
-    parser.add_argument("--no-loop-detection", action="store_true",
-                        help="Disable loop detection in colmap")
-
-    parser.add_argument("--model", "-m", type=str, default="colmap", choices=["colmap", "hloc", "hloc++"],
-                        help="Reconstruction method")
-    parser.add_argument("--matcher", type=str, default="exhaustive",
-                        help="Feature matcher, omitted for video inputs")
-
-    parser.add_argument("--hloc-max-keypoints", type=int, default=20000,
-                        help="Maximum number of keypoints for HLoc")
-
-    parser.add_argument("--no-gen-mask", action="store_true",
-                        help="Do not generate object masks")
-    parser.add_argument("--no-undistort", action="store_true",
-                        help="Do not undistort images")
-
-    parser.add_argument("--verbose", action="store_true",
-                        help="Verbose mode")
-
-    return parser.parse_args()
-
-
 def main():
+    def get_args():
+        import argparse
+        parser = argparse.ArgumentParser(description="Nuwa: 3D Reconstruction Pipeline")
+        parser.add_argument("--video-path", "-v", type=str, default="",
+                            help="Path to the video file")
+        parser.add_argument("--image-dir", "-i", type=str, default="",
+                            help="Path to the images / to expand the frames")
+        parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
+                            help="Output directory")
+
+        parser.add_argument("--fps", type=int, default=3, help="FPS for video inputs")
+
+        parser.add_argument("--camera-model", type=str, default="OPENCV",
+                            help="Camera model")
+        parser.add_argument("--camera-heuristics", "-c", type=str, default=None,
+                            help="Camera heuristics")
+        parser.add_argument("--colmap-binary", type=str, default="colmap",
+                            help="Path to the COLMAP binary")
+        parser.add_argument("--colmap-dir", type=str, default="",
+                            help="Path to the COLMAP outputs")
+        parser.add_argument("--no-loop-detection", action="store_true",
+                            help="Disable loop detection in colmap")
+
+        parser.add_argument("--model", "-m", type=str, default="colmap", choices=["colmap", "hloc", "hloc++"],
+                            help="Reconstruction method")
+        parser.add_argument("--matcher", type=str, default="exhaustive",
+                            help="Feature matcher, omitted for video inputs")
+
+        parser.add_argument("--hloc-max-keypoints", type=int, default=20000,
+                            help="Maximum number of keypoints for HLoc")
+
+        parser.add_argument("--no-gen-mask", action="store_true",
+                            help="Do not generate object masks")
+        parser.add_argument("--no-undistort", action="store_true",
+                            help="Do not undistort images")
+
+        parser.add_argument("--verbose", action="store_true",
+                            help="Verbose mode")
+
+        return parser.parse_args()
+
     import os
     import sys
     args = get_args()
@@ -71,6 +70,8 @@ def main():
     elif args.model == "hloc++":
         model = "hloc"
         hloc_use_pixsfm = True
+    else:
+        raise ValueError(f"Unknown model: {args.model}")
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
@@ -117,12 +118,16 @@ def main():
         )
 
     if gen_mask:
-        _ = db.calculate_object_mask(
-            os.path.join(out_dir, "masks"),
-            os.path.join(out_dir, "images"),
-            adjust_cameras=True,
-            copy_org=True
-        )
+        try:
+            _ = db.calculate_object_mask(
+                os.path.join(out_dir, "masks"),
+                os.path.join(out_dir, "images"),
+                adjust_cameras=True,
+                copy_org=True
+            )
+        except ValueError as e:
+            print(f"ERROR Mask generation failed: {e}")
+            print("Continuing without mask generation")
 
     db.dump(os.path.join(out_dir, "nuwa_db.json"))
 
@@ -133,4 +138,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    print("Done!")
