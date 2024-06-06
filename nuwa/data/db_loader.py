@@ -168,11 +168,12 @@ def from_image_folder(
         matcher="sequential",
         single_camera=True,
         camera_model="OPENCV",
-        camera_heuristics="",
+        camera_heuristics=None,
         camera_run_undistort=True,
         undistort_image_dir="",
         colmap_out_dir="",
         colmap_binary="colmap",
+        colmap_loop_detection=False,
         hloc_max_keypoints=20000,
         hloc_use_pixsfm=False,
         verbose=False
@@ -188,6 +189,7 @@ def from_image_folder(
     :param undistort_image_dir: output directory for undistorted images
     :param colmap_out_dir: output directory for colmap data
     :param colmap_binary: path to colmap binary
+    :param colmap_loop_detection: run loop detection in colmap
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
     :param verbose: verbose
@@ -216,6 +218,7 @@ def from_image_folder(
             heuristics=camera_heuristics,
             colmap_binary=colmap_binary,
             single_camera=single_camera,
+            loop_detection=colmap_loop_detection,
             verbose=verbose
         )
 
@@ -268,7 +271,7 @@ def from_video(
         method="colmap",
         single_camera=True,
         camera_model="OPENCV",
-        camera_heuristics="",
+        camera_heuristics=None,
         camera_run_undistort=True,
         colmap_out_dir="",
         colmap_binary="colmap",

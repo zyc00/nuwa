@@ -11,9 +11,10 @@ def run_colmap(
         out_dir,
         matcher="exhaustive",
         camera_model="OPENCV",
-        heuristics="\"\"",
+        heuristics=None,
         colmap_binary="colmap",
         single_camera=True,
+        loop_detection=True,
         verbose=False
 ):
     with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA"'))
@@ -28,26 +29,26 @@ def run_colmap(
     cache_dir = os.path.expanduser(f"~/.cache/colmap")
     os.makedirs(cache_dir, exist_ok=True)
     vocab_path = os.path.join(cache_dir, 'vocab.bin')
-    if not os.path.exists(vocab_path):
+    if loop_detection and not os.path.exists(vocab_path):
         print("downloading vocab tree")
         do_system(("wget", "-O", f"{vocab_path}",
                    "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
 
     do_system((f"{colmap_binary}", "feature_extractor",
                f"--ImageReader.camera_model={camera_model}",
-               f"--ImageReader.camera_params={heuristics}",
                f"--SiftExtraction.estimate_affine_shape=true",
                f"--SiftExtraction.domain_size_pooling=true",
                f"--SiftExtraction.use_gpu={with_cuda}",
                f"--ImageReader.single_camera={single_camera}",
                f"--database_path={db}",
-               f"--image_path={image_dir}"), verbose)
+               f"--image_path={image_dir}") + () if heuristics is None else
+              (f"--ImageReader.camera_params={heuristics}",), verbose)
 
     do_system((f"{colmap_binary}", f"{matcher}_matcher",
                f"--SiftMatching.guided_matching=true",
                f"--SiftMatching.use_gpu={with_cuda}",
                f"--SequentialMatching.vocab_tree_path={vocab_path}",
-               f"--SequentialMatching.loop_detection=true",
+               f"--SequentialMatching.loop_detection={loop_detection}",
                f"--database_path={db}"), verbose)
 
     do_system((f"{colmap_binary}", "mapper",
@@ -73,7 +74,7 @@ def run_hloc(
         out_dir,
         matcher="exhaustive",
         camera_model="OPENCV",
-        heuristics="",
+        heuristics=None,
         colmap_binary="colmap",
         single_camera=True,
         max_keypoints=20000,
@@ -161,8 +162,9 @@ def run_hloc(
         if single_camera else pycolmap.CameraMode.AUTO
     image_options = {
         "camera_model": camera_model,
-        "camera_params": heuristics
     }
+    if heuristics is not None:
+        image_options["camera_params"] = heuristics
     mapper_options = {
         # "abs_pose_min_inlier_ratio": 0.3,
         "ba_refine_principal_point": True
