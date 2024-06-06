@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nuwa',
-    version='0.0.26',
+    version='0.0.27',
     description='',
     author='Xiaoshuai Jet Zhang',
     author_email='jetgabr@gmail.com',

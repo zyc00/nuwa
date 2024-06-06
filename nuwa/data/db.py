@@ -133,7 +133,7 @@ class NuwaDB:
                 f.org_path = new_path
 
                 base_name = os.path.basename(f.org_path).split(".")[0]
-                mask_path = os.path.join(mask_save_dir, f"{base_name}_mask.png")
+                mask_path = os.path.join(mask_save_dir, f"{base_name}.png")
                 Image.fromarray(masks[i]).save(mask_path)
                 # TODO: save org_mask
 
@@ -164,7 +164,7 @@ class NuwaDB:
                 self.frames[i].camera.cy = ks[i][1, 2]
 
         for i, mask in enumerate(masks):
-            mask_path = os.path.join(mask_save_dir, f"{i:06d}_mask.png")
+            mask_path = os.path.join(mask_save_dir, f"{i:06d}.png")
             Image.fromarray(mask).save(mask_path)
             self.frames[i].mask_path = mask_path
 
