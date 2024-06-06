@@ -41,8 +41,8 @@ def run_colmap(
                f"--SiftExtraction.use_gpu={with_cuda}",
                f"--ImageReader.single_camera={single_camera}",
                f"--database_path={db}",
-               f"--image_path={image_dir}") + () if heuristics is None else
-              (f"--ImageReader.camera_params={heuristics}",), verbose)
+               f"--image_path={image_dir}") + (() if heuristics is None else
+              (f"--ImageReader.camera_params={heuristics}",)), verbose)
 
     do_system((f"{colmap_binary}", f"{matcher}_matcher",
                f"--SiftMatching.guided_matching=true",
