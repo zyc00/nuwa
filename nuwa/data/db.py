@@ -137,7 +137,6 @@ class NuwaDB:
                 Image.fromarray(masks[i]).save(mask_path)
                 # TODO: save org_mask
 
-
         if adjust_cameras:
             masks = np.array(masks)
             ks = np.array([f.camera.intrinsic_matrix for f in self.frames])

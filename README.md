@@ -1,6 +1,6 @@
 # nuwa
 
-Nuwa is a Python library for pre-processing images and videos for 3D reconstruction and generation pipelines. It provides a simple interface to load images or videos, estimate camera parameters, calculate object masks, and save the results in a structured format (NuwaDB).
+nuwa (女媧／女娲, Nǚwā) is a Python library for pre-processing images and videos for 3D reconstruction and generation pipelines. It provides a simple interface to load images or videos, estimate camera parameters, calculate object masks, and save the results in a structured format (NuwaDB).
 
 
 ## Get started
@@ -93,3 +93,18 @@ Example:
   ]
 }
 ```
+
+## FAQ
+
+### colmap and other sfm pipelines
+1. `colmap` could be installed with `apt install -y colmap`. This version is CPU-only. To install the GPU version, please refer to `setup_pixsfm.sh:21` or the [official colmap installation guide](https://colmap.github.io/install.html).
+2. nuwa uses colmap from system path by default. If you have a different version of colmap, you can specify the path to the colmap executable using the `--colmap_path` argument.
+3. To use a more advanced sfm pipeline (hloc, hloc++), you need to first install the required dependencies as shown in `setup_pixsfm.sh`.
+4. If you need the original colmap database/sparse estimation (e.g. for 3DGS pipelines), please pass `--colmap-dir` or `colmap_out_dir` explicitly. 
+
+### Known issues 
+1. If you encountered any issue with `flann`, try running with `--no-loop-detection` or pass `colmap_loop_detection=False`. There is likely an issue with your system kernel.
+
+### Segmentation
+1. The segmentation pipeline follows the *largest* object as the foreground. Make sure the object you want to segment is visible in the first frame and is the largest throughout the images.
+2. Pass `--no-gen-mask` to skip the segmentation step (for non-object scenes).
