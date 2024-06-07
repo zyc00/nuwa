@@ -121,13 +121,20 @@ def from_polycam(polycam_dir):
     seq_dir = os.path.join(polycam_dir, "keyframes")
     assert os.path.exists(seq_dir), f"Directory {seq_dir} does not exist"
 
-    uids = [a[:-4] for a in sorted(os.listdir(os.path.join(seq_dir, "corrected_images")))]
+    if os.path.exists(os.path.join(seq_dir, "corrected_cameras")):
+        dir_prefix = "corrected_"
+    else:
+        assert os.path.exists(os.path.join(seq_dir, "cameras"))
+        print("WARNING: using uncorrected cameras")
+        dir_prefix = ""
+
+    uids = [a[:-4] for a in sorted(os.listdir(os.path.join(seq_dir, f"{dir_prefix}images")))]
     nimgs = len(uids)
 
     frames = []
 
     for i in range(nimgs):
-        camera_json = json.load(open(os.path.join(seq_dir, f"corrected_cameras/{uids[i]}.json")))
+        camera_json = json.load(open(os.path.join(seq_dir, f"{dir_prefix}cameras/{uids[i]}.json")))
         camera = PinholeCamera(
             w=camera_json['width'],
             h=camera_json['height'],
@@ -144,7 +151,7 @@ def from_polycam(polycam_dir):
             [0, 0, 0, 1]
         ])
         pose = convert_camera_pose(pose, "blender", "cv")
-        image_path = os.path.abspath(os.path.join(seq_dir, f"corrected_images/{uids[i]}.jpg"))
+        image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
 
         frame = Frame(
             camera=camera,

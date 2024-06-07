@@ -33,8 +33,8 @@ def main():
         parser.add_argument("--hloc-max-keypoints", type=int, default=20000,
                             help="Maximum number of keypoints for HLoc")
 
-        parser.add_argument("--no-gen-mask", action="store_true",
-                            help="Do not generate object masks")
+        parser.add_argument("--object", action="store_true",
+                            help="Object scene, will generate object masks and normalize the scene into (-1, 1)")
         parser.add_argument("--no-undistort", action="store_true",
                             help="Do not undistort images")
 
@@ -56,7 +56,7 @@ def main():
     colmap_binary = args.colmap_binary
     colmap_out_dir = args.colmap_dir
     colmap_loop_detection = not args.no_loop_detection
-    gen_mask = not args.no_gen_mask
+    gen_mask = args.object
     undistort = not args.no_undistort
     if gen_mask:
         assert camera_model == "OPENCV" and undistort

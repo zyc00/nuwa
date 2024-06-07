@@ -51,7 +51,7 @@ Example:
 {
   "source": "colmap",                      # source of the data, choices [colmap, polycam]
   
-  "up": [                                  # up vector of the scene
+  "up": [                                  # (Optional) up vector of the scene
     0.018489610893192888,
     0.2981818762436387,
     -0.7178426463982863
