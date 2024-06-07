@@ -28,6 +28,9 @@ class _Camera:
     def intrinsic_matrix(self):
         return [[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]]
 
+    def __repr__(self):
+        return self.to_dict().__repr__()
+
 
 class OpenCvCamera(_Camera):
     def __init__(self, w, h, fx, fy, cx, cy, k1=0., k2=0., p1=0., p2=0.):

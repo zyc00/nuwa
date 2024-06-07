@@ -57,3 +57,6 @@ class Frame:
         }
         ret.update(self.camera.to_dict())
         return ret
+
+    def __repr__(self):
+        return self.to_dict().__repr__()

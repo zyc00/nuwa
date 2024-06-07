@@ -4,10 +4,13 @@ import shutil
 from copy import deepcopy
 
 import numpy as np
+from PIL import Image
+
 from nuwa.data.db import NuwaDB
 from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, colmap_undistort_images
+from nuwa.utils.image_utils import center_crop_and_update_intrinsics
 from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose
 from nuwa.utils.video_utils import run_ffmpeg
 
@@ -117,16 +120,37 @@ def from_colmap(
     return ret
 
 
-def from_polycam(polycam_dir):
+def from_polycam(
+        polycam_dir,
+        new_image_dir=None,
+        discard_border_rate=0.0
+):
+    """
+        :param polycam_dir: path to polycam directory
+        :param new_image_dir: new image directory, will copy images if not None
+        :param discard_border_rate: discard border rate (for black border removal, [0, 0.5])
+    """
     seq_dir = os.path.join(polycam_dir, "keyframes")
     assert os.path.exists(seq_dir), f"Directory {seq_dir} does not exist"
 
     if os.path.exists(os.path.join(seq_dir, "corrected_cameras")):
         dir_prefix = "corrected_"
+
+        if discard_border_rate <= 0:
+            print("WARNING: corrected image but discard_border_rate is 0, skipping border removal (try 0.01?)")
+
+        if discard_border_rate > 0:
+            assert discard_border_rate <= 1, "discard_border_rate should be in [0, 1]"
+            assert new_image_dir is not None, "new_image_dir is required for border removal"
+
     else:
         assert os.path.exists(os.path.join(seq_dir, "cameras"))
+        assert discard_border_rate <= 0, "discard_border_rate is only for corrected cameras"
         print("WARNING: using uncorrected cameras")
         dir_prefix = ""
+
+    if new_image_dir is not None:
+        os.makedirs(new_image_dir, exist_ok=True)
 
     uids = [a[:-4] for a in sorted(os.listdir(os.path.join(seq_dir, f"{dir_prefix}images")))]
     nimgs = len(uids)
@@ -135,15 +159,36 @@ def from_polycam(polycam_dir):
 
     for i in range(nimgs):
         camera_json = json.load(open(os.path.join(seq_dir, f"{dir_prefix}cameras/{uids[i]}.json")))
-        camera = PinholeCamera(
-            w=camera_json['width'],
-            h=camera_json['height'],
-            fx=camera_json['fx'],
-            fy=camera_json['fy'],
-            cx=camera_json['cx'],
-            cy=camera_json['cy']
-        )
 
+        w = camera_json['width']
+        h = camera_json['height']
+        fx = camera_json['fx']
+        fy = camera_json['fy']
+        cx = camera_json['cx']
+        cy = camera_json['cy']
+
+        if discard_border_rate > 0:
+            image = Image.open(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
+            assert image.size == (w, h), f"Image size mismatch: {image.size} vs ({w}, {h})"
+
+            image, (fx, fy, cx, cy) = center_crop_and_update_intrinsics(
+                image,
+                (fx, fy, cx, cy),
+                crop_size=(int(w * (1 - discard_border_rate)), int(h * (1 - discard_border_rate)))
+            )
+
+            image_path = os.path.abspath(os.path.join(new_image_dir, f"{uids[i]}.jpg"))
+            image.save(image_path)
+
+        else:
+            image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
+
+            if new_image_dir is not None:
+                new_image_path = os.path.join(new_image_dir, os.path.basename(image_path))
+                shutil.copy2(image_path, new_image_path)
+                image_path = os.path.abspath(new_image_path)
+
+        camera = PinholeCamera(w, h, fx, fy, cx, cy)
         pose = np.array([
             [camera_json['t_00'], camera_json['t_01'], camera_json['t_02'], camera_json['t_03']],
             [camera_json['t_10'], camera_json['t_11'], camera_json['t_12'], camera_json['t_13']],
@@ -151,7 +196,6 @@ def from_polycam(polycam_dir):
             [0, 0, 0, 1]
         ])
         pose = convert_camera_pose(pose, "blender", "cv")
-        image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
 
         frame = Frame(
             camera=camera,

@@ -17,6 +17,13 @@ class NuwaDB:
 
     _colmap_dir = ""
 
+    def __repr__(self):
+        return {
+            "source": self.source,
+            "_colmap_dir": self._colmap_dir,
+            "frames": [f"{len(self.frames)} frames..."]
+        }.__repr__()
+
     def get_up(self):
         up = np.zeros(3)
         for f in self.frames:
