@@ -113,3 +113,7 @@ Example:
 ### Segmentation
 1. The segmentation pipeline follows the *largest* object as the foreground. Make sure the object you want to segment is visible in the first frame and is the largest throughout the images.
 2. Pass `--no-gen-mask` to skip the segmentation step (for non-object scenes).
+
+## TODO
+- [ ] Pose optimization for polycam sourced data
+- [ ] More camera normalization options
