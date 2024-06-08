@@ -1,4 +1,4 @@
-from nuwa import from_image_folder, from_video
+from nuwa import from_image_folder, from_video, from_polycam
 
 
 def main():
@@ -8,11 +8,21 @@ def main():
         parser.add_argument("--video-path", "-v", type=str, default="",
                             help="Path to the video file")
         parser.add_argument("--image-dir", "-i", type=str, default="",
-                            help="Path to the images / to expand the frames")
+                            help="Path to the images / to expand the frames / to export the polycam images")
+        parser.add_argument("--polycam-dir", "-p", type=str, default="",
+                            help="Path to the polycam dir or zip")
         parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
                             help="Output directory")
 
         parser.add_argument("--fps", type=int, default=3, help="FPS for video inputs")
+        parser.add_argument("--discard-border-rate", type=float, default=0.0)
+        parser.add_argument("--portrait", action="store_true",
+                            help="For polycam, indicating images should be portrait (rot90)")
+
+        parser.add_argument("--normalize", action="store_true",
+                            help="Normalize cameras into (-1, 1)")
+        parser.add_argument("--normalize-scale-factor", type=float, default=1.0,
+                            help="Scale factor for normalization")
 
         parser.add_argument("--camera-model", type=str, default="OPENCV",
                             help="Camera model")
@@ -20,7 +30,7 @@ def main():
                             help="Camera heuristics")
         parser.add_argument("--colmap-binary", type=str, default="colmap",
                             help="Path to the COLMAP binary")
-        parser.add_argument("--colmap-dir", type=str, default="",
+        parser.add_argument("--colmap-dir", type=str, default=None,
                             help="Path to the COLMAP outputs")
         parser.add_argument("--no-loop-detection", action="store_true",
                             help="Disable loop detection in colmap")
@@ -48,13 +58,17 @@ def main():
     args = get_args()
 
     out_dir = args.out_dir
-    os.makedirs(out_dir, exist_ok=False)
+    if os.path.exists(out_dir):
+        print("WARNING: Output directory exists, overwriting")
+    os.makedirs(out_dir, exist_ok=True)
 
     debug = args.verbose
     camera_model = args.camera_model
     heuristics = args.camera_heuristics
     colmap_binary = args.colmap_binary
     colmap_out_dir = args.colmap_dir
+    if colmap_out_dir is None:
+        colmap_out_dir = os.path.join(out_dir, "colmap")
     colmap_loop_detection = not args.no_loop_detection
     gen_mask = args.object
     undistort = not args.no_undistort
@@ -75,7 +89,18 @@ def main():
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
-    if args.video_path:
+    if args.polycam_dir:
+        polycam_image_out_dir = os.path.join(out_dir, "images") \
+            if args.image_dir == "" else args.image_dir
+
+        db = from_polycam(
+            args.polycam_dir,
+            polycam_image_out_dir,
+            args.discard_border_rate,
+            args.portrait
+        )
+
+    elif args.video_path:
         image_dir = args.image_dir
         if image_dir == "":
             image_dir = os.path.join(out_dir, "_org_images")
@@ -128,6 +153,9 @@ def main():
         except ValueError as e:
             print(f"ERROR Mask generation failed: {e}")
             print("Continuing without mask generation")
+
+    elif args.normalize:
+        db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
 
     db.dump(os.path.join(out_dir, "nuwa_db.json"))
 

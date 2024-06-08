@@ -41,3 +41,27 @@ def qvec2rotmat(qvec):
             1 - 2 * qvec[1] ** 2 - 2 * qvec[2] ** 2
         ]
     ])
+
+
+def get_rot90_camera_matrices(pose, fx, fy, cx, cy, h):
+    """
+    Get camera matrices for rotating image 90 degrees clockwise
+
+    :param pose: camera pose matrix
+    :param fx
+    :param fy
+    :param cx
+    :param cy
+    :param h: original image height
+    :return:
+    """
+    new_pose_matrix = pose @ np.array([[0, 1, 0, 0],
+                                       [-1, 0, 0, 0],
+                                       [0, 0, 1, 0],
+                                       [0, 0, 0, 1]])
+    nfx = fy
+    nfy = fx
+    ncx = h - cy
+    ncy = cx
+
+    return new_pose_matrix, nfx, nfy, ncx, ncy

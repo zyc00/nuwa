@@ -20,7 +20,7 @@ def run_colmap(
 ):
     start_time = time.time()
 
-    with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA"'))
+    with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA" -q'))
     single_camera = int(single_camera)
 
     os.makedirs(out_dir, exist_ok=True)

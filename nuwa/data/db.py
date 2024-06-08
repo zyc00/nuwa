@@ -80,6 +80,19 @@ class NuwaDB:
             adjust_cameras=True,
             copy_org=True
     ):
+        """
+        Calculate object masks for each frame
+        If adjust_cameras is True, the cameras will be normalized and adjusted to fit the masked images.
+
+        :param mask_save_dir:
+        :param masked_image_save_dir:
+        :param reduce_factor:
+        :param shrink:
+        :param sam_ckpt_path:
+        :param adjust_cameras:
+        :param copy_org:
+        :return:
+        """
         from nuwa.utils.seg_utils import segment_img, sam, scene_carving, crop_images, SAMAPI
         from nuwa.utils.dmv_utils import raft_api
 
@@ -134,7 +147,7 @@ class NuwaDB:
                 # TODO: masked_org_image_path
                 new_path = os.path.join(masked_image_save_dir, os.path.basename(f.org_path))
                 old_image = Image.open(f.org_path)
-                new_image = Image.new("RGBA", old_image.size, (0, 0, 0, 0))
+                new_image = Image.new(old_image.mode, old_image.size, 0)
                 new_image.paste(old_image, mask=Image.fromarray(masks[i]))
                 new_image.save(new_path)
                 f.org_path = new_path
@@ -145,6 +158,7 @@ class NuwaDB:
                 # TODO: save org_mask
 
         if adjust_cameras:
+            self.normalize_cameras(positive_z=True, scale_factor=1.0)
             masks = np.array(masks)
             ks = np.array([f.camera.intrinsic_matrix for f in self.frames])
             camera_poses = np.array([f.pose for f in self.frames])
@@ -178,6 +192,25 @@ class NuwaDB:
 
     def undistort_images(self):
         raise NotImplementedError
+
+    def normalize_cameras(self, positive_z=True, scale_factor=1.1):
+        # TODO: Rewrite this function with camera near far
+
+        camera_poses = np.array([f.pose for f in self.frames])
+        xm, ym, zm = camera_poses[:, :3, 3].min(0)
+        xM, yM, zM = camera_poses[:, :3, 3].max(0)
+
+        if positive_z:
+            offset = np.array([(xm + xM) / 2, (ym + yM) / 2, zm])
+        else:
+            offset = np.array([(xm + xM) / 2, (ym + yM) / 2, (zm + zM) / 2])
+        camera_poses[:, :3, 3] -= offset
+
+        scale = scale_factor / np.linalg.norm(camera_poses[:, :3, 3], axis=-1).max()  # fix bug...
+        camera_poses[:, :3, 3] *= scale
+
+        for i, f in enumerate(self.frames):
+            f.pose = camera_poses[i]
 
     def export_3dgs(self, out_dir):
         """

@@ -25,6 +25,9 @@ nuwa -v VIDEO_PATH -o OUT_DIR --fps 30
 # To process a folder of images:
 nuwa -i IMAGE_DIR -o OUT_DIR
 
+# To process a polycam zip / folder:
+nuwa -p polycam.zip -o OUT_DIR --portrait --object
+
 # To view all options:
 nuwa -h
 ```

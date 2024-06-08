@@ -42,24 +42,13 @@ class RembgHelper:
 
 def scene_carving(masks, Ks, camera_poses):
     """
+    Assume normalized camera poses
 
     :param masks: N,H,W
     :param Ks: N,3,3
     :param camera_poses: N,4,4, opencv format
     :return:
     """
-
-    # pre recenter and rescale cameras
-    rx = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0])
-    for i in range(len(camera_poses)):
-        camera_poses[i] = rx @ camera_poses[i]
-    xm, ym, zm = camera_poses[:, :3, 3].min(0)
-    xM, yM, zM = camera_poses[:, :3, 3].max(0)
-    offset = np.array([(xm + xM) / 2, (ym + yM) / 2, zm])
-    camera_poses[:, :3, 3] -= offset
-    scale = 1.0 / np.linalg.norm(camera_poses[:, :3, 3], axis=-1).max()  # fix bug...
-    camera_poses[:, :3, 3] *= scale
-
     coords = generate_grid([64, 64, 64], 1)[0].T.cpu().numpy()
     origin = np.array([-1, -1, -1])
     voxel_size = 2 / 64

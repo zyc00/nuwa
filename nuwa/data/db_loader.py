@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import tempfile
 from copy import deepcopy
 
 import numpy as np
@@ -10,8 +11,9 @@ from nuwa.data.db import NuwaDB
 from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, colmap_undistort_images
+from nuwa.utils.dmv_utils import utils_3d
 from nuwa.utils.image_utils import center_crop_and_update_intrinsics
-from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose
+from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices
 from nuwa.utils.video_utils import run_ffmpeg
 
 
@@ -102,7 +104,7 @@ def from_colmap(
                 r = qvec2rotmat(-q_vec)
                 t = t_vec.reshape([3, 1])
                 w2c = np.concatenate([np.concatenate([r, t], 1), bottom], 0)
-                c2w = np.linalg.inv(w2c)
+                c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ np.linalg.inv(w2c)  # world z up
 
                 frame = Frame(
                     camera=deepcopy(cameras[int(elems[8])]),
@@ -123,13 +125,22 @@ def from_colmap(
 def from_polycam(
         polycam_dir,
         new_image_dir=None,
-        discard_border_rate=0.0
+        discard_border_rate=0.0,
+        should_be_portrait=False
 ):
     """
-        :param polycam_dir: path to polycam directory
+        :param polycam_dir: path to polycam directory or polycam zip
         :param new_image_dir: new image directory, will copy images if not None
         :param discard_border_rate: discard border rate (for black border removal, [0, 0.5])
+        :param should_be_portrait: if the captured data should be portrait or not
     """
+    if polycam_dir.endswith(".zip"):
+        assert new_image_dir is not None and new_image_dir != "", "new_image_dir is required for zip"
+        import zipfile
+        with zipfile.ZipFile(polycam_dir, 'r') as zip_ref:
+            polycam_dir = tempfile.mkdtemp()
+            zip_ref.extractall(polycam_dir)
+
     seq_dir = os.path.join(polycam_dir, "keyframes")
     assert os.path.exists(seq_dir), f"Directory {seq_dir} does not exist"
 
@@ -137,7 +148,8 @@ def from_polycam(
         dir_prefix = "corrected_"
 
         if discard_border_rate <= 0:
-            print("WARNING: corrected image but discard_border_rate is 0, skipping border removal (try 0.01?)")
+            print("WARNING: corrected image but discard_border_rate is 0, "
+                  "this could lead to black pixels (try 0.01?)")
 
         if discard_border_rate > 0:
             assert discard_border_rate <= 1, "discard_border_rate should be in [0, 1]"
@@ -145,8 +157,10 @@ def from_polycam(
 
     else:
         assert os.path.exists(os.path.join(seq_dir, "cameras"))
-        assert discard_border_rate <= 0, "discard_border_rate is only for corrected cameras"
-        print("WARNING: using uncorrected cameras")
+        print("WARNING: using uncorrected cameras, this is not recommended as "
+              "poses will be inaccurate and there is not guarantee of world z up")
+        if discard_border_rate > 0:
+            print(f"WARNING: using f{discard_border_rate=} for uncorrected cameras")
         dir_prefix = ""
 
     if new_image_dir is not None:
@@ -167,8 +181,27 @@ def from_polycam(
         cx = camera_json['cx']
         cy = camera_json['cy']
 
+        pose = np.array([
+            [camera_json['t_00'], camera_json['t_01'], camera_json['t_02'], camera_json['t_03']],
+            [camera_json['t_10'], camera_json['t_11'], camera_json['t_12'], camera_json['t_13']],
+            [camera_json['t_20'], camera_json['t_21'], camera_json['t_22'], camera_json['t_23']],
+            [0, 0, 0, 1]
+        ])
+        pose = convert_camera_pose(pose, "blender", "cv")
+        image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
+        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose  # fix up
+
+        if should_be_portrait:
+            if w >= h:
+                assert new_image_dir is not None and new_image_dir != "", \
+                    "new_image_dir is required for portrait"
+
+            else:
+                print("WARNING: image is already portrait, ignoring the `portrait` flag...")
+                should_be_portrait = False
+
         if discard_border_rate > 0:
-            image = Image.open(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
+            image = Image.open(image_path)
             assert image.size == (w, h), f"Image size mismatch: {image.size} vs ({w}, {h})"
 
             image, (fx, fy, cx, cy) = center_crop_and_update_intrinsics(
@@ -177,25 +210,32 @@ def from_polycam(
                 crop_size=(int(w * (1 - discard_border_rate)), int(h * (1 - discard_border_rate)))
             )
 
+            if should_be_portrait:
+                image = image.rotate(270, expand=True)
+                pose, fx, fy, cx, cy = get_rot90_camera_matrices(pose, fx, fy, cx, cy, h)
+                h, w = w, h
+                pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+
             image_path = os.path.abspath(os.path.join(new_image_dir, f"{uids[i]}.jpg"))
             image.save(image_path)
 
         else:
-            image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
-
             if new_image_dir is not None:
                 new_image_path = os.path.join(new_image_dir, os.path.basename(image_path))
-                shutil.copy2(image_path, new_image_path)
+
+                if should_be_portrait:
+                    image = Image.open(image_path)
+                    image = image.rotate(270, expand=True)
+                    image.save(new_image_path)
+                    pose, fx, fy, cx, cy = get_rot90_camera_matrices(pose, fx, fy, cx, cy, h)
+                    h, w = w, h
+                    pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+                else:
+                    shutil.copy2(image_path, new_image_path)
+
                 image_path = os.path.abspath(new_image_path)
 
         camera = PinholeCamera(w, h, fx, fy, cx, cy)
-        pose = np.array([
-            [camera_json['t_00'], camera_json['t_01'], camera_json['t_02'], camera_json['t_03']],
-            [camera_json['t_10'], camera_json['t_11'], camera_json['t_12'], camera_json['t_13']],
-            [camera_json['t_20'], camera_json['t_21'], camera_json['t_22'], camera_json['t_23']],
-            [0, 0, 0, 1]
-        ])
-        pose = convert_camera_pose(pose, "blender", "cv")
 
         frame = Frame(
             camera=camera,
