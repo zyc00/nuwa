@@ -340,6 +340,8 @@ def from_image_folder(
             colmap_binary=colmap_binary,
             verbose=verbose
         )
+        if os.path.exists(undistort_image_dir):
+            shutil.rmtree(undistort_image_dir)
         shutil.move(os.path.join(undistort_dir, "images"), undistort_image_dir)
         new_sparse_dir = os.path.join(undistort_dir, "sparse")
         img_dir = undistort_image_dir
