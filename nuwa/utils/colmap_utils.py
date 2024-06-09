@@ -27,7 +27,7 @@ def run_colmap(
 
     db = os.path.join(out_dir, "database.db")
     sparse = os.path.join(out_dir, "sparse")
-    os.makedirs(sparse, exist_ok=False)
+    os.makedirs(sparse, exist_ok=True)
 
     cache_dir = os.path.expanduser(f"~/.cache/colmap")
     os.makedirs(cache_dir, exist_ok=True)
@@ -129,7 +129,7 @@ def run_hloc(
     images = Path(image_dir)
     hloc_info_dir = out_dir / "hloc_info"
     os.makedirs(out_dir, exist_ok=True)
-    os.makedirs(hloc_info_dir, exist_ok=False)
+    os.makedirs(hloc_info_dir, exist_ok=True)
 
     sfm_pairs = hloc_info_dir / 'pairs-sfm.txt'
     sfm_dir = hloc_info_dir / 'sfm'
@@ -137,7 +137,7 @@ def run_hloc(
     matches = hloc_info_dir / 'matches.h5'
 
     cameras = out_dir / "sparse/0"
-    os.makedirs(cameras, exist_ok=False)
+    os.makedirs(cameras, exist_ok=True)
 
     references = [str(p.relative_to(images)) for p in images.iterdir()
                   if str(p).endswith('jpg') or str(p).endswith('png')]
@@ -234,7 +234,7 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
 
     sparse0 = f"{out_dir}/sparse/0"
     if not os.path.exists(sparse0):
-        os.makedirs(sparse0)
+        os.makedirs(sparse0, exist_ok=True)
         shutil.move(f"{out_dir}/sparse/cameras.bin", sparse0)
         shutil.move(f"{out_dir}/sparse/images.bin", sparse0)
         shutil.move(f"{out_dir}/sparse/points3D.bin", sparse0)
