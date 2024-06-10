@@ -126,6 +126,10 @@ def main():
         matcher = args.matcher
         image_dir = args.image_dir
 
+        if matcher == "exhaustive":
+            print("WARNING: Exhaustive matcher is used, this may take a long time. "
+                  "Pass --matcher explicitly if this is unwanted.")
+
         db = from_image_folder(
             image_dir,
             method=model,

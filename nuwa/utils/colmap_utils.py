@@ -32,7 +32,7 @@ def run_colmap(
     cache_dir = os.path.expanduser(f"~/.cache/colmap")
     os.makedirs(cache_dir, exist_ok=True)
     vocab_path = os.path.join(cache_dir, 'vocab.bin')
-    if loop_detection and not os.path.exists(vocab_path):
+    if matcher == "sequential" and loop_detection and not os.path.exists(vocab_path):
         print("downloading vocab tree")
         do_system(("wget", "-O", f"{vocab_path}",
                    "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
@@ -50,9 +50,10 @@ def run_colmap(
     do_system((f"{colmap_binary}", f"{matcher}_matcher",
                f"--SiftMatching.guided_matching=true",
                f"--SiftMatching.use_gpu={with_cuda}",
+               f"--database_path={db}") + ((
                f"--SequentialMatching.vocab_tree_path={vocab_path}",
-               f"--SequentialMatching.loop_detection={loop_detection}",
-               f"--database_path={db}"), verbose)
+               f"--SequentialMatching.loop_detection={loop_detection}") if matcher == "sequential" else ())
+              , verbose)
 
     do_system((f"{colmap_binary}", "mapper",
                f"--database_path={db}",
