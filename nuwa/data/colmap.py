@@ -1,12 +1,21 @@
 import os
+from typing import Dict, List
+
 import numpy as np
 import plyfile
 
+from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import colmap_convert_model
+from nuwa.utils.pose_utils import rotmat2qvec
 
 
 class Reconstruction:
-    def __init__(self, folder_path):
+    cameras: Dict[int, Dict[str, str | int | np.ndarray]]
+    points: Dict[int, Dict[str, float | np.ndarray]]
+    images: Dict[int, Dict[str, str | int | np.ndarray]]
+    image_dir: str | None
+
+    def __init__(self, folder_path: str, image_dir: str | None = None):
         camera_path = os.path.join(folder_path, "cameras.txt")
 
         if not os.path.exists(camera_path):
@@ -19,6 +28,70 @@ class Reconstruction:
         self.cameras = self._load_cameras(folder_path)
         self.points = self._load_points(folder_path)
         self.images = self._load_images(folder_path)
+        self.image_dir = image_dir
+
+    @classmethod
+    def from_colmap(cls, folder_path: str, image_dir: str | None = None):
+        return cls(folder_path, image_dir)
+
+    @classmethod
+    def from_data(
+            cls,
+            cameras: Dict[int, Dict[str, str | int | np.ndarray]],
+            points: Dict[int, Dict[str, float | np.ndarray]],
+            images: Dict[int, Dict[str, str | int | np.ndarray]],
+            image_dir: str | None = None
+    ):
+        obj = cls.__new__(cls)
+        obj.cameras = cameras
+        obj.points = points
+        obj.images = images
+        obj.image_dir = image_dir
+        return obj
+
+    @classmethod
+    def from_frames(cls, frames: List[Frame]):
+        nuwa_cameras = [f.camera for f in frames]
+
+        cameras = {}
+        for i, camera in enumerate(nuwa_cameras):
+            cameras[i] = {
+                "model": camera.type,
+                "width": camera.w,
+                "height": camera.h,
+                "params": camera.params
+            }
+
+        points = {}
+
+        images = {}
+        image_dir = None
+
+        for i, frame in enumerate(frames):
+            if image_dir is None:
+                image_dir = os.path.dirname(frame.image_path)
+            else:
+                assert image_dir == os.path.dirname(frame.image_path), "All images should be in the same directory"
+
+            Rt = np.linalg.inv(frame.pose)
+
+            images[i] = {
+                "camera_id": i,
+                "name": os.path.basename(frame.image_path),
+                "xys": np.zeros((0, 2), dtype=float),
+                "point_ids": np.array([], dtype=int),
+                "tvec": Rt[:3, 3],
+                "qvec": -rotmat2qvec(Rt[:3, :3]),
+            }
+
+        return cls.from_data(cameras, points, images, image_dir)
+
+    def __repr__(self):
+        return {
+            "cameras": f"[...{len(self.cameras)}...]",
+            "points": f"[...{len(self.points)}...]",
+            "images": f"[...{len(self.images)}...]"
+        }.__repr__()
 
     @staticmethod
     def _load_cameras(folder_path):
@@ -40,6 +113,9 @@ class Reconstruction:
                     'height': height,
                     'params': params
                 }
+        if len(cameras) == 0:
+            raise ValueError('No cameras found in the file')
+
         return cameras
 
     @staticmethod
@@ -62,6 +138,9 @@ class Reconstruction:
                     'error': error,
                     'track': track
                 }
+        if len(points) == 0:
+            print("WARNING: No points found in the file")
+
         return points
 
     @staticmethod
@@ -100,6 +179,9 @@ class Reconstruction:
             }
 
             idx += 2
+
+        if len(images) == 0:
+            raise ValueError('No images found in the file')
 
         return images
 
@@ -186,7 +268,12 @@ class Reconstruction:
                     file.write(f'{xy[0]} {xy[1]} {point3D_id} ')
                 file.write('\n')
 
-#
-# if __name__ == '__main__':
-#     import IPython
-#     IPython.embed()
+    def reorder_from_db(self, colmap_database_path):
+        from nuwa.utils.colmap_utils import get_name2id_from_colmap_db
+
+        name2id = get_name2id_from_colmap_db(colmap_database_path)
+        new_images = {}
+        for image in self.images.values():
+            new_images[name2id[image['name']]] = image
+
+        self.images = new_images

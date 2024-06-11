@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import tempfile
 from typing import List
 
 import cv2
@@ -10,13 +11,18 @@ from PIL import Image
 
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
+from nuwa.utils.colmap_utils import run_colmap
 
 
 class NuwaDB:
-    source: str = ""
-    frames: List[Frame] = []
+    source: str
+    frames: List[Frame]
+    colmap_reconstruction: Reconstruction | None
 
-    colmap_reconstruction: Reconstruction = None
+    def __init__(self, source="", frames=None, colmap_reconstruction=None):
+        self.source = source
+        self.frames = [] if frames is None else frames
+        self.colmap_reconstruction = colmap_reconstruction
 
     def __repr__(self):
         return {
@@ -26,13 +32,30 @@ class NuwaDB:
         }.__repr__()
 
     def get_up(self):
+        # legacy
         up = np.zeros(3)
         for f in self.frames:
             up += -f.pose[:3, 1]
         up = up / np.linalg.norm(up)
-        return up
 
-    def dump(self, out_json_path, copy_images_to=None, copy_masks_to=None):
+        # check if close to (0, 0, 1)
+        if np.abs(up[2]) < 0.9:
+            print(f"WARNING: avg up {tuple(up)} is not close to +z, please check if the extrinsics are correct.")
+        else:
+            print(f"INFO: avg up {tuple(up)}")
+
+        if self.source == "colmap":
+            return up
+        elif self.source == "polycam":
+            return np.array([0., 0., 1.])
+        else:
+            raise ValueError(f"Unknown source {self.source}")
+
+    def dump(self,
+             out_json_path,
+             copy_images_to=None,
+             copy_masks_to=None,
+             dump_reconstruction_to=None):
         if copy_images_to is not None:
             os.makedirs(copy_images_to, exist_ok=True)
             copy_images_to = os.path.abspath(copy_images_to)
@@ -70,6 +93,13 @@ class NuwaDB:
 
         with open(out_json_path + ".txt", "w") as outfile:
             outfile.write(f"{os.path.basename(out_json_path)}")
+
+        if dump_reconstruction_to is not None:
+            self.dump_reconstruction(dump_reconstruction_to)
+
+    def dump_reconstruction(self, out_dir):
+        assert self.colmap_reconstruction is not None
+        self.colmap_reconstruction.dump(out_dir)
 
     def calculate_object_mask(
             self,
@@ -178,7 +208,7 @@ class NuwaDB:
 
             # update info
             for i in range(len(self.frames)):
-                assert self.frames[i].camera.to_dict()["camera_param_model"] == "PINHOLE"
+                assert self.frames[i].camera.type == "PINHOLE"
                 self.frames[i].pose = camera_poses[i]
                 self.frames[i].image_path = os.path.join(masked_image_save_dir, f"{i:06d}.png")
                 self.frames[i].camera.w = w
@@ -219,46 +249,66 @@ class NuwaDB:
         for i, f in enumerate(self.frames):
             f.pose = camera_poses[i]
 
-    def export_3dgs(self, out_dir):
+    def finetune_pose(self,
+                      matcher="exhaustive",
+                      colmap_binary="colmap",
+                      single_camera=True,
+                      loop_detection=True,
+                      verbose=True):
         """
-        Export data to 3DGS format
+        Return a new database with the poses fine-tuned using colmap
 
-        <location>
-        |---images
-        |   |---<image 0>
-        |   |---<image 1>
-        |   |---...
-        |---sparse
-            |---0
-                |---cameras.bin
-                |---images.bin
-                |---points3D.bin
-
-        :param out_dir:
-        :return: None
+        :param matcher:
+        :param colmap_binary:
+        :param single_camera:
+        :param loop_detection:
+        :param verbose:
+        :return:
         """
+        if self.colmap_reconstruction is None:
+            raise ValueError("No colmap reconstruction found")
 
-        raise NotImplementedError
+        if self.source == "colmap":
+            print("WARNING: fine-tuning with colmap on a colmap sourced database")
 
-        # if self._colmap_dir == "":
-        #     raise NotImplementedError("db is not imported from colmap")
-        #
-        # if self.frames[0].mask_path != "":
-        #     raise NotImplementedError("export is not supported after masking")
-        #
-        # if not os.path.exists(self._colmap_dir):
-        #     raise FileNotFoundError(f"colmap dir {self._colmap_dir} not found")
-        #
-        # img_dir = os.path.join(out_dir, "images")
-        # sparse_dir = os.path.join(out_dir, "sparse")
-        #
-        # os.makedirs(out_dir, exist_ok=True)
-        # os.makedirs(img_dir, exist_ok=True)
-        # os.makedirs(sparse_dir, exist_ok=True)
-        #
-        # # copy images
-        # for i, f in enumerate(self.frames):
-        #     shutil.copy2(f.image_path, img_dir)
-        #
-        # # copy sparse
-        # shutil.copytree(self._colmap_dir, os.path.join(sparse_dir, "0"))
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+        colmap_out_dir = tempfile.mkdtemp()
+
+        run_colmap(
+            image_dir=self.colmap_reconstruction.image_dir,
+            out_dir=colmap_out_dir,
+            matcher=matcher,
+            camera_model=self.frames[0].camera.type,
+            heuristics=','.join(map(str, self.frames[0].camera.params)),
+            colmap_binary=colmap_binary,
+            single_camera=single_camera,
+            loop_detection=loop_detection,
+            from_db=None,
+            db_only=True,
+            verbose=verbose
+        )
+
+        shutil.rmtree(colmap_in_dir)
+        self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
+
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+
+        run_colmap(
+            image_dir=self.colmap_reconstruction.image_dir,
+            out_dir=colmap_out_dir,
+            in_dir=colmap_in_dir,
+            matcher=matcher,
+            camera_model=self.frames[0].camera.type,
+            heuristics=','.join(map(str, self.frames[0].camera.params)),
+            colmap_binary=colmap_binary,
+            single_camera=single_camera,
+            loop_detection=loop_detection,
+            from_db=os.path.join(colmap_out_dir, "database.db"),
+            db_only=False,
+            verbose=verbose
+        )
+
+        from nuwa import from_colmap
+        return from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))

@@ -8,69 +8,94 @@ from nuwa.utils.os_utils import do_system
 
 
 def run_colmap(
-        image_dir,
-        out_dir,
-        matcher="exhaustive",
-        camera_model="OPENCV",
-        heuristics=None,
-        colmap_binary="colmap",
-        single_camera=True,
-        loop_detection=True,
-        verbose=False
+        image_dir: str,
+        out_dir: str,
+        in_dir: str | None = None,
+        matcher: str = "exhaustive",
+        camera_model: str = "OPENCV",
+        heuristics: str | None = None,
+        colmap_binary: str = "colmap",
+        single_camera: bool = True,
+        loop_detection: bool = True,
+        from_db: str | None = None,
+        db_only: bool = False,
+        verbose: bool = False
 ):
     start_time = time.time()
+
+    if db_only:
+        assert from_db is None
+
+    if from_db is not None:
+        assert not db_only
 
     with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA" -q'))
     single_camera = int(single_camera)
 
     os.makedirs(out_dir, exist_ok=True)
-
-    db = os.path.join(out_dir, "database.db")
     sparse = os.path.join(out_dir, "sparse")
     os.makedirs(sparse, exist_ok=True)
 
-    cache_dir = os.path.expanduser(f"~/.cache/colmap")
-    os.makedirs(cache_dir, exist_ok=True)
-    vocab_path = os.path.join(cache_dir, 'vocab.bin')
-    if matcher == "sequential" and loop_detection and not os.path.exists(vocab_path):
-        print("downloading vocab tree")
-        do_system(("wget", "-O", f"{vocab_path}",
-                   "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
+    if from_db is None:
+        db = os.path.join(out_dir, "database.db")
+        cache_dir = os.path.expanduser(f"~/.cache/colmap")
+        os.makedirs(cache_dir, exist_ok=True)
+        vocab_path = os.path.join(cache_dir, 'vocab.bin')
+        if matcher == "sequential" and loop_detection and not os.path.exists(vocab_path):
+            print("downloading vocab tree")
+            do_system(("wget", "-O", f"{vocab_path}",
+                       "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
 
-    do_system((f"{colmap_binary}", "feature_extractor",
-               f"--ImageReader.camera_model={camera_model}",
-               f"--SiftExtraction.estimate_affine_shape=true",
-               f"--SiftExtraction.domain_size_pooling=true",
-               f"--SiftExtraction.use_gpu={with_cuda}",
-               f"--ImageReader.single_camera={single_camera}",
-               f"--database_path={db}",
-               f"--image_path={image_dir}") + (() if heuristics is None else
-              (f"--ImageReader.camera_params={heuristics}",)), verbose)
+        do_system((f"{colmap_binary}", "feature_extractor",
+                   f"--ImageReader.camera_model={camera_model}",
+                   f"--SiftExtraction.estimate_affine_shape=true",
+                   f"--SiftExtraction.domain_size_pooling=true",
+                   f"--SiftExtraction.use_gpu={with_cuda}",
+                   f"--ImageReader.single_camera={single_camera}",
+                   f"--database_path={db}",
+                   f"--image_path={image_dir}") + (() if heuristics is None else
+                  (f"--ImageReader.camera_params={heuristics}",)), verbose)
 
-    do_system((f"{colmap_binary}", f"{matcher}_matcher",
-               f"--SiftMatching.guided_matching=true",
-               f"--SiftMatching.use_gpu={with_cuda}",
-               f"--database_path={db}") + ((
-               f"--SequentialMatching.vocab_tree_path={vocab_path}",
-               f"--SequentialMatching.loop_detection={loop_detection}") if matcher == "sequential" else ())
-              , verbose)
+        do_system((f"{colmap_binary}", f"{matcher}_matcher",
+                   f"--SiftMatching.guided_matching=true",
+                   f"--SiftMatching.use_gpu={with_cuda}",
+                   f"--database_path={db}") + ((
+                   f"--SequentialMatching.vocab_tree_path={vocab_path}",
+                   f"--SequentialMatching.loop_detection={loop_detection}") if matcher == "sequential" else ())
+                  , verbose)
+    else:
+        db = from_db
 
-    do_system((f"{colmap_binary}", "mapper",
-               f"--database_path={db}",
-               f"--image_path={image_dir}",
-               f"--output_path={sparse}",
-               f"--Mapper.ba_refine_principal_point=1",
-               f"--Mapper.ba_global_function_tolerance=0.000001"), verbose)
+    if not db_only:
+        if in_dir is None:
+            do_system((f"{colmap_binary}", "mapper",
+                       f"--database_path={db}",
+                       f"--image_path={image_dir}",
+                       f"--output_path={sparse}",
+                       f"--Mapper.ba_refine_principal_point=1",
+                       f"--Mapper.ba_global_function_tolerance=0.000001"), verbose)
+            sparse = os.path.join(sparse, "0")
 
-    do_system((f"{colmap_binary}", "bundle_adjuster",
-               f"--input_path={sparse}/0",
-               f"--output_path={sparse}/0",
-               f"--BundleAdjustment.refine_principal_point=1"), verbose)
+        else:
+            do_system((f"{colmap_binary}", "mapper",
+                       f"--database_path={db}",
+                       f"--image_path={image_dir}",
+                       f"--input_path={in_dir}",
+                       f"--output_path={sparse}",
+                       f"--Mapper.ba_refine_principal_point=1",
+                       f"--Mapper.ba_global_function_tolerance=0.000001",
+                       f"--Mapper.fix_existing_images=true"), verbose)
 
-    do_system((f"{colmap_binary}", "model_converter",
-               f"--input_path={sparse}/0",
-               f"--output_path={sparse}/0",
-               f"--output_type=TXT"), verbose)
+        do_system((f"{colmap_binary}", "bundle_adjuster",
+                   f"--input_path={sparse}",
+                   f"--output_path={sparse}",
+                   f"--BundleAdjustment.refine_principal_point=1",
+                   f"--BundleAdjustment.function_tolerance=0.000001"), verbose)
+
+        do_system((f"{colmap_binary}", "model_converter",
+                   f"--input_path={sparse}",
+                   f"--output_path={sparse}",
+                   f"--output_type=TXT"), verbose)
 
     print(f"colmap finished in {time.time() - start_time:.2f} seconds")
 
@@ -241,3 +266,27 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
         shutil.move(f"{out_dir}/sparse/points3D.bin", sparse0)
 
     colmap_convert_model(sparse0, colmap_binary=colmap_binary, verbose=verbose)
+
+
+def get_name2id_from_colmap_db(path):
+    """
+    Read the COLMAP database file.
+    args:
+    path
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(path)
+    c = conn.cursor()
+
+    print(path)
+    print(c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+
+    images = {}
+    for row in c.execute("SELECT * FROM images"):
+        image_id, name, *_ = row
+        images[name] = image_id
+
+    print(images)
+
+    return images

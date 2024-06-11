@@ -1,3 +1,5 @@
+import tempfile
+
 from nuwa import from_image_folder, from_video, from_polycam
 
 
@@ -18,6 +20,8 @@ def main():
         parser.add_argument("--discard-border-rate", type=float, default=0.0)
         parser.add_argument("--portrait", action="store_true",
                             help="For polycam, indicating images should be portrait (rot90)")
+        parser.add_argument("--finetune-pose", action="store_true",
+                            help="For polycam, funetune pose with colmap")
 
         parser.add_argument("--normalize", action="store_true",
                             help="Normalize cameras into (-1, 1)")
@@ -62,13 +66,11 @@ def main():
         print("WARNING: Output directory exists, overwriting")
     os.makedirs(out_dir, exist_ok=True)
 
-    debug = args.verbose
+    verbose = args.verbose
     camera_model = args.camera_model
     heuristics = args.camera_heuristics
     colmap_binary = args.colmap_binary
     colmap_out_dir = args.colmap_dir
-    if colmap_out_dir is None:
-        colmap_out_dir = os.path.join(out_dir, "colmap")
     colmap_loop_detection = not args.no_loop_detection
     gen_mask = args.object
     undistort = not args.no_undistort
@@ -100,10 +102,20 @@ def main():
             args.portrait
         )
 
+        if args.finetune_pose:
+            raise NotImplementedError("Fine-tuning pose with COLMAP is not implemented yet (buggy)")
+            db = db.finetune_pose(
+                matcher="exhaustive",
+                colmap_binary=colmap_binary,
+                single_camera=True,
+                loop_detection=colmap_loop_detection,
+                verbose=verbose
+            )
+
     elif args.video_path:
         image_dir = args.image_dir
         if image_dir == "":
-            image_dir = os.path.join(out_dir, "_org_images")
+            image_dir = tempfile.mkdtemp()
 
         db = from_video(
             args.video_path,
@@ -118,7 +130,7 @@ def main():
             colmap_binary=colmap_binary,
             hloc_max_keypoints=hloc_max_keypoints,
             hloc_use_pixsfm=hloc_use_pixsfm,
-            verbose=debug
+            verbose=verbose
         )
 
     else:
@@ -143,7 +155,7 @@ def main():
             colmap_loop_detection=colmap_loop_detection,
             hloc_max_keypoints=hloc_max_keypoints,
             hloc_use_pixsfm=hloc_use_pixsfm,
-            verbose=debug
+            verbose=verbose
         )
 
     if gen_mask:
@@ -161,7 +173,10 @@ def main():
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
 
-    db.dump(os.path.join(out_dir, "nuwa_db.json"))
+    db.dump(
+        os.path.join(out_dir, "nuwa_db.json"),
+        dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
+    )
 
     # save argv
     with open(os.path.join(out_dir, "argv.txt"), "w") as f:

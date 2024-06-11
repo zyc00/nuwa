@@ -18,11 +18,48 @@ from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_ca
 from nuwa.utils.video_utils import run_ffmpeg
 
 
+def from_reconstruction(
+        reconstruction: Reconstruction,
+):
+    frames = []
+    for image_id, image in reconstruction.images.items():
+        camera_id = image["camera_id"]
+        camera = reconstruction.cameras[camera_id]
+        camera_model = camera["model"]
+
+        if camera_model == "OPENCV":
+            camera = OpenCvCamera(camera["width"], camera["height"], *camera["params"])
+        elif camera_model == "PINHOLE":
+            camera = PinholeCamera(camera["width"], camera["height"], *camera["params"])
+        else:
+            raise ValueError(f"Unknown camera model: {camera_model}")
+
+        r = image["qvec"]
+        t = image["tvec"]
+        r = qvec2rotmat(-r)
+        t = t.reshape([3, 1])
+        w2c = np.concatenate([np.concatenate([r, t], 1), np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])], 0)
+        c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ np.linalg.inv(w2c)  # world z up
+
+        frame = Frame(
+            camera=camera,
+            image_path=os.path.join(reconstruction.image_dir, image["name"]),
+            org_path=os.path.join(reconstruction.image_dir, image["name"]),
+            pose=c2w,
+            seq_id=image_id
+        )
+        frames.append(frame)
+
+    return NuwaDB(
+        source="colmap",
+        frames=sorted(frames, key=lambda x: x.image_path),
+        colmap_reconstruction=deepcopy(reconstruction)
+    )
+
+
 def from_colmap(
         img_dir,
-        colmap_dir,
-        skip_early=0,
-        max_frames=-1
+        colmap_dir
 ):
     camera_path = os.path.join(colmap_dir, "cameras.txt")
 
@@ -33,95 +70,7 @@ def from_colmap(
         else:
             raise ValueError(f"Camera file {camera_path} does not exist")
 
-    cameras = {}
-    with open(camera_path, "r") as f:
-        for line in f:
-            # 1 SIMPLE_RADIAL 2048 1536 1580.46 1024 768 0.0045691
-            # 1 OPENCV 3840 2160 3178.27 3182.09 1920 1080 0.159668 -0.231286 -0.00123982 0.00272224
-            # 1 RADIAL 1920 1080 1665.1 960 540 0.0672856 -0.0761443
-            if line[0] == "#":
-                continue
-            els = line.split(" ")
-
-            camera_id = int(els[0])
-            camera_model = els[1]
-
-            if camera_model == "OPENCV":
-                camera = OpenCvCamera(
-                    w=float(els[2]),
-                    h=float(els[3]),
-                    fx=float(els[4]),
-                    fy=float(els[5]),
-                    cx=float(els[6]),
-                    cy=float(els[7]),
-                    k1=float(els[8]),
-                    k2=float(els[9]),
-                    p1=float(els[10]),
-                    p2=float(els[11])
-                )
-            elif camera_model == "PINHOLE":
-                camera = PinholeCamera(
-                    w=float(els[2]),
-                    h=float(els[3]),
-                    fx=float(els[4]),
-                    fy=float(els[5]),
-                    cx=float(els[6]),
-                    cy=float(els[7])
-                )
-            else:
-                raise ValueError(f"Unknown camera model: {camera_model}")
-
-            cameras[camera_id] = camera
-
-    if len(cameras) == 0:
-        raise ValueError("No cameras found in cameras.txt")
-
-    with open(os.path.join(colmap_dir, "images.txt"), "r") as f:
-        i = 0
-        bottom = np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])
-
-        frames = []
-        frames_abs = []
-
-        # up = np.zeros(3)
-        for line in f:
-            if 0 < max_frames <= len(frames):
-                break
-
-            line = line.strip()
-            if line[0] == "#":
-                continue
-            i = i + 1
-            if i < skip_early * 2:
-                continue
-            if i % 2 == 1:
-                # 1-4 is quat, 5-7 is trans, 9ff is filename (9, if filename contains no spaces)
-                elems = line.split(" ")
-                image_abs = os.path.abspath(os.path.join(img_dir, '_'.join(elems[9:])))
-                frames_abs.append(image_abs)
-                image_id = int(elems[0])
-                q_vec = np.array(tuple(map(float, elems[1:5])))
-                t_vec = np.array(tuple(map(float, elems[5:8])))
-                r = qvec2rotmat(-q_vec)
-                t = t_vec.reshape([3, 1])
-                w2c = np.concatenate([np.concatenate([r, t], 1), bottom], 0)
-                c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ np.linalg.inv(w2c)  # world z up
-
-                frame = Frame(
-                    camera=deepcopy(cameras[int(elems[8])]),
-                    image_path=image_abs,
-                    org_path=image_abs,
-                    pose=c2w,
-                    seq_id=image_id
-                )
-                frames.append(frame)
-
-    ret = NuwaDB()
-    ret.frames = sorted(frames, key=lambda x: x.image_path)
-    ret.source = "colmap"
-    ret.colmap_reconstruction = Reconstruction(colmap_dir)
-
-    return ret
+    return from_reconstruction(Reconstruction(colmap_dir, image_dir=img_dir))
 
 
 def from_polycam(
@@ -249,11 +198,13 @@ def from_polycam(
         )
         frames.append(frame)
 
-    ret = NuwaDB()
-    ret.frames = sorted(frames, key=lambda x: x.image_path)
-    ret.source = "polycam"
+    frames = sorted(frames, key=lambda x: x.image_path)
 
-    return ret
+    return NuwaDB(
+        source="polycam",
+        frames=frames,
+        colmap_reconstruction=Reconstruction.from_frames(frames)
+    )
 
 
 def from_image_folder(

@@ -7,12 +7,12 @@ from nuwa.utils.pose_utils import convert_camera_pose
 
 class Frame:
     camera: _Camera
-    image_path: str  # abs path
+    image_path: str   # abs path
     pose: np.ndarray  # OpenCV Convention
     sharpness: float
-    seq_id: int = -1
-    mask_path: str = ""  # abs path
-    org_path: str = ""  # abs path
+    seq_id: int
+    mask_path: str    # abs path
+    org_path: str     # abs path
 
     def __init__(
             self,

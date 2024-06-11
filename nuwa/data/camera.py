@@ -1,5 +1,6 @@
 import abc
 import math
+from typing import List
 
 
 class _Camera:
@@ -9,7 +10,6 @@ class _Camera:
     fy: float
     cx: float
     cy: float
-    is_fisheye: bool = False
 
     k1: float
     k2: float
@@ -21,12 +21,22 @@ class _Camera:
         pass
 
     @abc.abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict:
         raise NotImplementedError
 
     @property
-    def intrinsic_matrix(self):
-        return [[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]]
+    @abc.abstractmethod
+    def type(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def params(self) -> tuple:
+        raise NotImplementedError
+
+    @property
+    def intrinsic_matrix(self) -> List[List[float]]:
+        return [[self.fx, 0., self.cx], [0., self.fy, self.cy], [0., 0., 1.]]
 
     def __repr__(self):
         return self.to_dict().__repr__()
@@ -44,6 +54,14 @@ class OpenCvCamera(_Camera):
         self.k2 = k2
         self.p1 = p1
         self.p2 = p2
+
+    @property
+    def type(self):
+        return "OPENCV"
+
+    @property
+    def params(self):
+        return self.fx, self.fy, self.cx, self.cy, self.k1, self.k2, self.p1, self.p2
 
     def to_dict(self):
         return {
@@ -81,6 +99,14 @@ class PinholeCamera(_Camera):
         self.cx = cx
         self.cy = cy
 
+    @property
+    def type(self):
+        return "PINHOLE"
+
+    @property
+    def params(self):
+        return self.fx, self.fy, self.cx, self.cy
+
     def to_dict(self):
         return {
             "w": self.w,
@@ -89,7 +115,7 @@ class PinholeCamera(_Camera):
             "fy": self.fy,
             "cx": self.cx,
             "cy": self.cy,
-            "is_fisheye": self.is_fisheye,
+            "is_fisheye": False,
 
             "fl_x": self.fx,
             "fl_y": self.fy,
