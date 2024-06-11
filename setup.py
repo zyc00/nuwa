@@ -18,6 +18,7 @@ setup(
         'torch>=2.0.0',
         'torchvision>=0.16.0',
         'easydict>=1.0',
+        'plyfile>=1.0.3'
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

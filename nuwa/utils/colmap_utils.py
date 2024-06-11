@@ -208,14 +208,14 @@ def run_hloc(
     print(f"hloc finished in {time.time() - start_time:.2f} seconds")
 
 
-def colmap_convert_model(camera_dir, out_dir=None, colmap_binary="colmap", verbose=False):
+def colmap_convert_model(camera_dir, out_dir=None, out_type="TXT", colmap_binary="colmap", verbose=False):
     if out_dir is None:
         out_dir = camera_dir
 
     do_system((f"{colmap_binary}", "model_converter",
                f"--input_path={camera_dir}",
                f"--output_path={out_dir}",
-               f"--output_type=TXT"), verbose)
+               f"--output_type={out_type}"), verbose)
 
 
 def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colmap", verbose=False):

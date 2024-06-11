@@ -7,6 +7,7 @@ from copy import deepcopy
 import numpy as np
 from PIL import Image
 
+from nuwa.data.colmap import Reconstruction
 from nuwa.data.db import NuwaDB
 from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
@@ -118,7 +119,8 @@ def from_colmap(
     ret = NuwaDB()
     ret.frames = sorted(frames, key=lambda x: x.image_path)
     ret.source = "colmap"
-    ret._colmap_dir = colmap_dir
+    ret.colmap_reconstruction = Reconstruction(colmap_dir)
+
     return ret
 
 

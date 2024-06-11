@@ -8,6 +8,7 @@ import numpy as np
 import tqdm
 from PIL import Image
 
+from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
 
 
@@ -15,12 +16,12 @@ class NuwaDB:
     source: str = ""
     frames: List[Frame] = []
 
-    _colmap_dir = ""
+    colmap_reconstruction: Reconstruction = None
 
     def __repr__(self):
         return {
             "source": self.source,
-            "_colmap_dir": self._colmap_dir,
+            "colmap_reconstruction": "None" if self.colmap_reconstruction is None else "[Valid Reconstruction]",
             "frames": [f"{len(self.frames)} frames..."]
         }.__repr__()
 
@@ -95,6 +96,10 @@ class NuwaDB:
         """
         from nuwa.utils.seg_utils import segment_img, sam, scene_carving, crop_images, SAMAPI
         from nuwa.utils.dmv_utils import raft_api
+
+        # TODO: fix this
+        if self.colmap_reconstruction is not None:
+            print("WARNING: in the current version, colmap reconstruction will break after masking")
 
         os.makedirs(mask_save_dir, exist_ok=True)
         os.makedirs(masked_image_save_dir, exist_ok=True)
@@ -205,9 +210,11 @@ class NuwaDB:
         else:
             offset = np.array([(xm + xM) / 2, (ym + yM) / 2, (zm + zM) / 2])
         camera_poses[:, :3, 3] -= offset
+        self.colmap_reconstruction.world_translate(-offset)
 
         scale = scale_factor / np.linalg.norm(camera_poses[:, :3, 3], axis=-1).max()  # fix bug...
         camera_poses[:, :3, 3] *= scale
+        self.colmap_reconstruction.world_scale(scale)
 
         for i, f in enumerate(self.frames):
             f.pose = camera_poses[i]
@@ -231,25 +238,27 @@ class NuwaDB:
         :return: None
         """
 
-        if self._colmap_dir == "":
-            raise NotImplementedError("db is not imported from colmap")
+        raise NotImplementedError
 
-        if self.frames[0].mask_path != "":
-            raise NotImplementedError("export is not supported after masking")
-
-        if not os.path.exists(self._colmap_dir):
-            raise FileNotFoundError(f"colmap dir {self._colmap_dir} not found")
-
-        img_dir = os.path.join(out_dir, "images")
-        sparse_dir = os.path.join(out_dir, "sparse")
-
-        os.makedirs(out_dir, exist_ok=True)
-        os.makedirs(img_dir, exist_ok=True)
-        os.makedirs(sparse_dir, exist_ok=True)
-
-        # copy images
-        for i, f in enumerate(self.frames):
-            shutil.copy2(f.image_path, img_dir)
-
-        # copy sparse
-        shutil.copytree(self._colmap_dir, os.path.join(sparse_dir, "0"))
+        # if self._colmap_dir == "":
+        #     raise NotImplementedError("db is not imported from colmap")
+        #
+        # if self.frames[0].mask_path != "":
+        #     raise NotImplementedError("export is not supported after masking")
+        #
+        # if not os.path.exists(self._colmap_dir):
+        #     raise FileNotFoundError(f"colmap dir {self._colmap_dir} not found")
+        #
+        # img_dir = os.path.join(out_dir, "images")
+        # sparse_dir = os.path.join(out_dir, "sparse")
+        #
+        # os.makedirs(out_dir, exist_ok=True)
+        # os.makedirs(img_dir, exist_ok=True)
+        # os.makedirs(sparse_dir, exist_ok=True)
+        #
+        # # copy images
+        # for i, f in enumerate(self.frames):
+        #     shutil.copy2(f.image_path, img_dir)
+        #
+        # # copy sparse
+        # shutil.copytree(self._colmap_dir, os.path.join(sparse_dir, "0"))
