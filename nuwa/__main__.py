@@ -152,6 +152,10 @@ def main():
         )
 
     if gen_mask:
+        if args.finetune_pose:
+            db.normalize_cameras(positive_z=True, scale_factor=0.6)
+            db.finetune_pose(args.ingp_binary, verbose=verbose)
+
         try:
             _ = db.calculate_object_mask(
                 os.path.join(out_dir, "masks"),
@@ -159,19 +163,22 @@ def main():
                 adjust_cameras=True,
                 copy_org=True
             )
+
+            if args.finetune_pose:
+                db.finetune_pose(args.ingp_binary, verbose=verbose)
+
         except ValueError as e:
             print(f"ERROR Mask generation failed: {e}")
             print("Continuing without mask generation")
 
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
-
-    if args.finetune_pose:
-        if gen_mask or args.normalize:
+        if args.finetune_pose:
             db.finetune_pose(args.ingp_binary, verbose=verbose)
-        else:
-            print("WARNING: Pose fine-tuning requires object scene or normalization.")
-            print("WARNING: Skipping pose fine-tuning...")
+
+    elif args.finetune_pose:
+        print("WARNING: Pose fine-tuning requires object scene or normalization.")
+        print("WARNING: Skipping pose fine-tuning...")
 
     db.dump(
         os.path.join(out_dir, "nuwa_db.json"),

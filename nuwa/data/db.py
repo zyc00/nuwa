@@ -11,7 +11,6 @@ from PIL import Image
 
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
-from nuwa.utils.colmap_utils import run_colmap
 from nuwa.utils.os_utils import do_system
 from nuwa.utils.pose_utils import convert_camera_pose
 
@@ -33,7 +32,7 @@ class NuwaDB:
         return {
             "source": self.source,
             "colmap_reconstruction": "None" if self.colmap_reconstruction is None else "[Valid Reconstruction]",
-            "frames": [f"{len(self.frames)} frames..."],
+            "frames": [f"{len(self.frames)} Frames..."],
             "scale_denorm": "...Data Not Normalized..." if self.scale_denorm is None else self.scale_denorm
         }.__repr__()
 
@@ -308,50 +307,53 @@ class NuwaDB:
         :param verbose:
         :return:
         """
-        if self.colmap_reconstruction is None:
-            raise ValueError("No colmap reconstruction found")
 
-        if self.source == "colmap":
-            print("WARNING: fine-tuning with colmap on a colmap sourced database")
-
-        colmap_in_dir = tempfile.mkdtemp()
-        self.dump_reconstruction(colmap_in_dir)
-        colmap_out_dir = tempfile.mkdtemp()
-
-        run_colmap(
-            image_dir=self.colmap_reconstruction.image_dir,
-            out_dir=colmap_out_dir,
-            matcher=matcher,
-            camera_model=self.frames[0].camera.type,
-            heuristics=','.join(map(str, self.frames[0].camera.params)),
-            colmap_binary=colmap_binary,
-            single_camera=single_camera,
-            loop_detection=loop_detection,
-            from_db=None,
-            db_only=True,
-            verbose=verbose
-        )
-
-        shutil.rmtree(colmap_in_dir)
-        self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
-
-        colmap_in_dir = tempfile.mkdtemp()
-        self.dump_reconstruction(colmap_in_dir)
-
-        run_colmap(
-            image_dir=self.colmap_reconstruction.image_dir,
-            out_dir=colmap_out_dir,
-            in_dir=colmap_in_dir,
-            matcher=matcher,
-            camera_model=self.frames[0].camera.type,
-            heuristics=','.join(map(str, self.frames[0].camera.params)),
-            colmap_binary=colmap_binary,
-            single_camera=single_camera,
-            loop_detection=loop_detection,
-            from_db=os.path.join(colmap_out_dir, "database.db"),
-            db_only=False,
-            verbose=verbose
-        )
-
-        from nuwa import from_colmap
-        return from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))
+        raise NotImplementedError("This function is not implemented yet")
+        #
+        # if self.colmap_reconstruction is None:
+        #     raise ValueError("No colmap reconstruction found")
+        #
+        # if self.source == "colmap":
+        #     print("WARNING: fine-tuning with colmap on a colmap sourced database")
+        #
+        # colmap_in_dir = tempfile.mkdtemp()
+        # self.dump_reconstruction(colmap_in_dir)
+        # colmap_out_dir = tempfile.mkdtemp()
+        #
+        # run_colmap(
+        #     image_dir=self.colmap_reconstruction.image_dir,
+        #     out_dir=colmap_out_dir,
+        #     matcher=matcher,
+        #     camera_model=self.frames[0].camera.type,
+        #     heuristics=','.join(map(str, self.frames[0].camera.params)),
+        #     colmap_binary=colmap_binary,
+        #     single_camera=single_camera,
+        #     loop_detection=loop_detection,
+        #     from_db=None,
+        #     db_only=True,
+        #     verbose=verbose
+        # )
+        #
+        # shutil.rmtree(colmap_in_dir)
+        # self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
+        #
+        # colmap_in_dir = tempfile.mkdtemp()
+        # self.dump_reconstruction(colmap_in_dir)
+        #
+        # run_colmap(
+        #     image_dir=self.colmap_reconstruction.image_dir,
+        #     out_dir=colmap_out_dir,
+        #     in_dir=colmap_in_dir,
+        #     matcher=matcher,
+        #     camera_model=self.frames[0].camera.type,
+        #     heuristics=','.join(map(str, self.frames[0].camera.params)),
+        #     colmap_binary=colmap_binary,
+        #     single_camera=single_camera,
+        #     loop_detection=loop_detection,
+        #     from_db=os.path.join(colmap_out_dir, "database.db"),
+        #     db_only=False,
+        #     verbose=verbose
+        # )
+        #
+        # from nuwa import from_colmap
+        # return from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))
