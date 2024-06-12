@@ -59,6 +59,10 @@ Example:
     0.2981818762436387,
     -0.7178426463982863
   ],
+    
+  "scale_denorm": 2.0,                     # (Optional, for normalized scenes) scale denormalization factor, use this to scale the scene back to the original size
+    
+  "colmap_path": "./colmap",               # (Optional) relative path to the colmap folder (camera, images, points)
   
   "camera_angle_x": 0.6528299784,          # (Optional, NOT recommended) global camera angle x, if this exists, focal parameters (x and y) in frames are ignored  
   
@@ -115,7 +119,7 @@ Example:
 2. Pass `--no-gen-mask` to skip the segmentation step (for non-object scenes).
 
 ## TODO
-- [ ] Add scale denorm
+- [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
 - [ ] Pose optimization for polycam sourced data
 - [ ] More camera normalization options

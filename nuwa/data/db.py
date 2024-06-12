@@ -12,6 +12,7 @@ from PIL import Image
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap
+from nuwa.utils.os_utils import do_system
 
 
 class NuwaDB:
@@ -19,16 +20,20 @@ class NuwaDB:
     frames: List[Frame]
     colmap_reconstruction: Reconstruction | None
 
+    scale_denorm: float | None  # scale_denorm for normalizing the scene into, typically into (-1, 1)
+
     def __init__(self, source="", frames=None, colmap_reconstruction=None):
         self.source = source
         self.frames = [] if frames is None else frames
         self.colmap_reconstruction = colmap_reconstruction
+        self.scale_denorm = None
 
     def __repr__(self):
         return {
             "source": self.source,
             "colmap_reconstruction": "None" if self.colmap_reconstruction is None else "[Valid Reconstruction]",
-            "frames": [f"{len(self.frames)} frames..."]
+            "frames": [f"{len(self.frames)} frames..."],
+            "scale_denorm": "...Data Not Normalized..." if self.scale_denorm is None else self.scale_denorm
         }.__repr__()
 
     def get_up(self):
@@ -84,18 +89,26 @@ class NuwaDB:
                 f["mask_path"] = os.path.relpath(
                     f["mask_path"], start=os.path.dirname(out_json_path))
 
-        with open(out_json_path, "w") as outfile:
-            json.dump({
-                "source": self.source,
-                "up": self.get_up().tolist(),
-                "frames": frames
-            }, outfile, indent=4)
+        db = {
+            "source": self.source,
+            "up": self.get_up().tolist(),
+        }
 
-        with open(out_json_path + ".txt", "w") as outfile:
-            outfile.write(f"{os.path.basename(out_json_path)}")
+        if self.scale_denorm is not None:
+            db["scale_denorm"] = self.scale_denorm
 
         if dump_reconstruction_to is not None:
             self.dump_reconstruction(dump_reconstruction_to)
+            db["colmap_path"] = os.path.relpath(
+                dump_reconstruction_to, start=os.path.dirname(out_json_path))
+
+        db["frames"] = frames
+
+        with open(out_json_path, "w") as outfile:
+            json.dump(db, outfile, indent=4)
+
+        with open(out_json_path + ".txt", "w") as outfile:
+            outfile.write(f"{os.path.basename(out_json_path)}")
 
     def dump_reconstruction(self, out_dir):
         assert self.colmap_reconstruction is not None
@@ -197,7 +210,8 @@ class NuwaDB:
             masks = np.array(masks)
             ks = np.array([f.camera.intrinsic_matrix for f in self.frames])
             camera_poses = np.array([f.pose for f in self.frames])
-            camera_poses = scene_carving(masks, ks, camera_poses)
+            camera_poses, scale = scene_carving(masks, ks, camera_poses)
+            self.scale_denorm *= scale
             images, ks, masks = crop_images(images, masks, ks)
 
             h, w = images[0].shape[:2]
@@ -228,7 +242,7 @@ class NuwaDB:
     def undistort_images(self):
         raise NotImplementedError
 
-    def normalize_cameras(self, positive_z=True, scale_factor=1.1):
+    def normalize_cameras(self, positive_z=True, scale_factor=0.9):
         # TODO: Rewrite this function with camera near far
 
         camera_poses = np.array([f.pose for f in self.frames])
@@ -249,7 +263,35 @@ class NuwaDB:
         for i, f in enumerate(self.frames):
             f.pose = camera_poses[i]
 
-    def finetune_pose(self,
+        if self.scale_denorm is None:
+            self.scale_denorm = scale
+        else:
+            self.scale_denorm *= scale
+
+    def finetune_pose_ingp(self,
+                           ingp_binary="instant-ngp",
+                           verbose=True):
+
+        tmp_dump = tempfile.mkdtemp()
+        tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
+        self.dump(tmp_json)
+
+        print(f"INFO: please run `{ingp_binary} {tmp_json} --no-train` now with extrinsic optimization and dump pose`")
+        input("Press Enter to continue...")
+
+        refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
+        refined_json = json.load(open(refined_json, "r"))
+
+        for i, f in enumerate(self.frames):
+            refined = refined_json[i]
+            assert i == refined["id"]
+
+            refined_transform_mat = np.array(refined["transform_matrix"])
+            refined_transform_mat = np.linalg.inv(refined_transform_mat)     # GL convention
+
+        exit(-1)
+
+    def finetune_pose_colmap(self,
                       matcher="exhaustive",
                       colmap_binary="colmap",
                       single_camera=True,
