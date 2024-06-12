@@ -13,6 +13,7 @@ from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap
 from nuwa.utils.os_utils import do_system
+from nuwa.utils.pose_utils import convert_camera_pose
 
 
 class NuwaDB:
@@ -20,7 +21,7 @@ class NuwaDB:
     frames: List[Frame]
     colmap_reconstruction: Reconstruction | None
 
-    scale_denorm: float | None  # scale_denorm for normalizing the scene into, typically into (-1, 1)
+    scale_denorm: float | None     # scale_denorm for normalizing the scene into, typically into (-1, 1)
 
     def __init__(self, source="", frames=None, colmap_reconstruction=None):
         self.source = source
@@ -268,16 +269,13 @@ class NuwaDB:
         else:
             self.scale_denorm *= scale
 
-    def finetune_pose_ingp(self,
-                           ingp_binary="instant-ngp",
-                           verbose=True):
-
+    def finetune_pose(self, ingp_binary="instant-ngp", verbose=True):
         tmp_dump = tempfile.mkdtemp()
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        print(f"INFO: please run `{ingp_binary} {tmp_json} --no-train` now with extrinsic optimization and dump pose`")
-        input("Press Enter to continue...")
+        print(f"INFO: please use GUI to perform extrinsic optimization and dump pose (no quat)`")
+        do_system((ingp_binary, tmp_json, "--no-train"), verbose=verbose)
 
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
         refined_json = json.load(open(refined_json, "r"))
@@ -285,11 +283,14 @@ class NuwaDB:
         for i, f in enumerate(self.frames):
             refined = refined_json[i]
             assert i == refined["id"]
+            assert int(os.path.basename(f.image_path).split(".")[0]) == i
 
-            refined_transform_mat = np.array(refined["transform_matrix"])
-            refined_transform_mat = np.linalg.inv(refined_transform_mat)     # GL convention
+            pose = convert_camera_pose(
+                np.array(refined["transform_matrix"]), "blender", "cv")
+            f.pose = pose
 
-        exit(-1)
+        self.colmap_reconstruction.update_poses_from_frames(self.frames)
+        shutil.rmtree(tmp_dump)
 
     def finetune_pose_colmap(self,
                       matcher="exhaustive",

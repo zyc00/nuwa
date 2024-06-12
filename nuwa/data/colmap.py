@@ -86,6 +86,13 @@ class Reconstruction:
 
         return cls.from_data(cameras, points, images, image_dir)
 
+    def update_poses_from_frames(self, frames: List[Frame]):
+        for i, frame in enumerate(frames):
+            Rt = np.linalg.inv(frame.pose)
+            assert os.path.basename(frame.image_path) == self.images[i]["name"]
+            self.images[i]["tvec"] = Rt[:3, 3]
+            self.images[i]["qvec"] = -rotmat2qvec(Rt[:3, :3])
+
     def __repr__(self):
         return {
             "cameras": f"[...{len(self.cameras)}...]",

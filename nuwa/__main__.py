@@ -20,8 +20,11 @@ def main():
         parser.add_argument("--discard-border-rate", type=float, default=0.0)
         parser.add_argument("--portrait", action="store_true",
                             help="For polycam, indicating images should be portrait (rot90)")
+
         parser.add_argument("--finetune-pose", action="store_true",
-                            help="For polycam, funetune pose with colmap")
+                            help="Fine-tune pose with colmap, requiring normalized scenes")
+        parser.add_argument("--ingp-binary", type=str, default="instant-ngp",
+                            help="Path to the instant-ngp binary")
 
         parser.add_argument("--normalize", action="store_true",
                             help="Normalize cameras into (-1, 1)")
@@ -102,16 +105,6 @@ def main():
             args.portrait
         )
 
-        if args.finetune_pose:
-            raise NotImplementedError("Fine-tuning pose with COLMAP is not implemented yet (buggy)")
-            db = db.finetune_pose(
-                matcher="exhaustive",
-                colmap_binary=colmap_binary,
-                single_camera=True,
-                loop_detection=colmap_loop_detection,
-                verbose=verbose
-            )
-
     elif args.video_path:
         image_dir = args.image_dir
         if image_dir == "":
@@ -173,12 +166,18 @@ def main():
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
 
+    if args.finetune_pose:
+        if gen_mask or args.normalize:
+            db.finetune_pose(args.ingp_binary, verbose=verbose)
+        else:
+            print("WARNING: Pose fine-tuning requires object scene or normalization.")
+            print("WARNING: Skipping pose fine-tuning...")
+
     db.dump(
         os.path.join(out_dir, "nuwa_db.json"),
         dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
     )
 
-    # save argv
     with open(os.path.join(out_dir, "argv.txt"), "w") as f:
         f.write(" ".join(sys.argv))
 
