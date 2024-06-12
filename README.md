@@ -115,5 +115,7 @@ Example:
 2. Pass `--no-gen-mask` to skip the segmentation step (for non-object scenes).
 
 ## TODO
+- [ ] Add scale denorm
+- [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
 - [ ] Pose optimization for polycam sourced data
 - [ ] More camera normalization options
