@@ -19,6 +19,7 @@ def run_colmap(
         loop_detection: bool = True,
         from_db: str | None = None,
         db_only: bool = False,
+        fix_image_pose: bool = False,
         verbose: bool = False
 ):
     start_time = time.time()
@@ -31,6 +32,7 @@ def run_colmap(
 
     with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA" -q'))
     single_camera = int(single_camera)
+    fix_image_pose = int(fix_image_pose)
 
     os.makedirs(out_dir, exist_ok=True)
     sparse = os.path.join(out_dir, "sparse")
@@ -84,7 +86,7 @@ def run_colmap(
                        f"--output_path={sparse}",
                        f"--Mapper.ba_refine_principal_point=1",
                        f"--Mapper.ba_global_function_tolerance=0.000001",
-                       f"--Mapper.fix_existing_images=true"), verbose)
+                       f"--Mapper.fix_existing_images={fix_image_pose}"), verbose)
 
         do_system((f"{colmap_binary}", "bundle_adjuster",
                    f"--input_path={sparse}",
@@ -268,7 +270,7 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
     colmap_convert_model(sparse0, colmap_binary=colmap_binary, verbose=verbose)
 
 
-def get_name2id_from_colmap_db(path):
+def get_name2id_from_colmap_db(path, verbose=False):
     """
     Read the COLMAP database file.
     args:
@@ -279,14 +281,16 @@ def get_name2id_from_colmap_db(path):
     conn = sqlite3.connect(path)
     c = conn.cursor()
 
-    print(path)
-    print(c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+    if verbose:
+        print(path)
+        print(c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
 
     images = {}
     for row in c.execute("SELECT * FROM images"):
         image_id, name, *_ = row
         images[name] = image_id
 
-    print(images)
+    if verbose:
+        print(images)
 
     return images

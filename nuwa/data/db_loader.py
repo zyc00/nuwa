@@ -275,6 +275,16 @@ def from_3dscannerapp(
     )
 
 
+def from_nuwadb(path):
+    db = json.load(open(path))
+    frames = sorted([Frame.from_dict(f) for f in db["frames"]], key=lambda x: x.image_path)
+    return NuwaDB(
+        source=db["source"],
+        frames=frames,
+        colmap_reconstruction=Reconstruction.from_frames(frames)
+    )
+
+
 def from_image_folder(
         img_dir,
         method="colmap",

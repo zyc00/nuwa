@@ -75,9 +75,10 @@ class NuwaDB:
             copy_masks_to = os.path.abspath(copy_masks_to)
 
             for f in self.frames:
-                new_path = os.path.join(copy_masks_to, os.path.basename(f.mask_path))
-                shutil.copy2(f.mask_path, new_path)
-                f.mask_path = new_path
+                if f.mask_path:
+                    new_path = os.path.join(copy_masks_to, os.path.basename(f.mask_path))
+                    shutil.copy2(f.mask_path, new_path)
+                    f.mask_path = new_path
 
         frames = [f.to_dict() for f in self.frames]
         for f in frames:

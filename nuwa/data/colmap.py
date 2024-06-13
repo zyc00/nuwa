@@ -3,6 +3,7 @@ from typing import Dict, List
 
 import numpy as np
 import plyfile
+from copy import deepcopy as copy
 
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import colmap_convert_model
@@ -275,12 +276,15 @@ class Reconstruction:
                     file.write(f'{xy[0]} {xy[1]} {point3D_id} ')
                 file.write('\n')
 
-    def reorder_from_db(self, colmap_database_path):
+    def reorder_from_db(self, colmap_database_path, verbose=False):
         from nuwa.utils.colmap_utils import get_name2id_from_colmap_db
 
-        name2id = get_name2id_from_colmap_db(colmap_database_path)
+        name2id = get_name2id_from_colmap_db(colmap_database_path, verbose)
         new_images = {}
         for image in self.images.values():
-            new_images[name2id[image['name']]] = image
+            new_images[name2id[image['name']]] = copy(image)
+
+        if verbose:
+            print(new_images)
 
         self.images = new_images

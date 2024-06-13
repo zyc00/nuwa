@@ -1,6 +1,6 @@
 import numpy as np
 
-from nuwa.data.camera import _Camera
+from nuwa.data.camera import _Camera, OpenCvCamera, PinholeCamera
 from nuwa.utils.image_utils import sharpness
 from nuwa.utils.pose_utils import convert_camera_pose
 
@@ -57,6 +57,42 @@ class Frame:
         }
         ret.update(self.camera.to_dict())
         return ret
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        if data["camera_param_model"] == "OPENCV":
+            camera = OpenCvCamera(
+                data["w"], data["h"],
+                data["fx"], data["fy"],
+                data["cx"], data["cy"],
+                data["k1"], data["k2"],
+                data["p1"], data["p2"]
+            )
+        elif data["camera_param_model"] == "PINHOLE":
+            camera = PinholeCamera(
+                data["w"], data["h"],
+                data["fx"], data["fy"],
+                data["cx"], data["cy"]
+            )
+        else:
+            raise ValueError(f"Unknown camera model: {data['camera_model']}")
+
+        pose = np.array(data["c2w"])
+        image_path = data["file_path"]
+        seq_id = data["seq_id"]
+        sharpness_score = data["sharpness"]
+        mask_path = data["mask_path"]
+        org_path = data["org_path"]
+
+        return cls(
+            camera,
+            image_path,
+            pose,
+            seq_id,
+            sharpness_score,
+            mask_path,
+            org_path
+        )
 
     def __repr__(self):
         return self.to_dict().__repr__()

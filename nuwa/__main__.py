@@ -1,6 +1,10 @@
+import shutil
+import sys
 import tempfile
 
-from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp
+from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap
+from nuwa.utils.colmap_utils import run_colmap
+from nuwa.utils.os_utils import do_system
 
 
 def main():
@@ -191,6 +195,103 @@ def main():
 
     db.dump(
         os.path.join(out_dir, "nuwa_db.json"),
+        dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
+    )
+
+    with open(os.path.join(out_dir, "argv.txt"), "w") as f:
+        f.write(" ".join(sys.argv))
+
+
+def colmap():
+    def get_args():
+        import argparse
+        parser = argparse.ArgumentParser(description="nuwa-colmap: generate 3D points with colmap for nuwadb")
+        parser.add_argument("--input-dir", "-i", type=str, default="",
+                            help="Path to the nuwadb")
+
+        parser.add_argument("--out-dir", "-o", type=str, default="",
+                            help="Path to the output dir")
+
+        parser.add_argument("--colmap-binary", type=str, default="colmap",
+                            help="Path to the COLMAP binary")
+
+        parser.add_argument("--no-loop-detection", action="store_true",
+                            help="Disable loop detection in colmap")
+
+        parser.add_argument("--verbose", action="store_true",
+                            help="Verbose mode")
+
+        return parser.parse_args()
+
+    import os
+    args = get_args()
+    nuwa_dir = args.input_dir
+    out_dir = args.out_dir
+    verbose = args.verbose
+    colmap_binary = args.colmap_binary
+    loop_detection = not args.no_loop_detection
+
+    image_dir = os.path.join(nuwa_dir, "images")
+    os.makedirs(out_dir, exist_ok=False)
+
+    db = from_nuwadb(os.path.join(nuwa_dir, "nuwa_db.json"))
+
+    heuristics = ','.join(map(str, db.frames[0].camera.params))
+
+    colmap_in_dir = tempfile.mkdtemp()
+    db.dump_reconstruction(colmap_in_dir)
+    colmap_out_dir = tempfile.mkdtemp()
+
+    run_colmap(
+        image_dir=image_dir,
+        out_dir=colmap_out_dir,
+        matcher="exhaustive",
+        camera_model="PINHOLE",
+        heuristics=heuristics,
+        colmap_binary=colmap_binary,
+        single_camera=False,
+        loop_detection=loop_detection,
+        from_db=None,
+        db_only=True,
+        verbose=verbose
+    )
+    db.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"), verbose=verbose)
+    shutil.rmtree(colmap_in_dir)
+    colmap_in_dir = tempfile.mkdtemp()
+    db.dump_reconstruction(colmap_in_dir)
+
+    # run_colmap(
+    #     image_dir=image_dir,
+    #     out_dir=colmap_out_dir,
+    #     in_dir=colmap_in_dir,
+    #     matcher="exhaustive",
+    #     camera_model="PINHOLE",
+    #     heuristics=heuristics,
+    #     colmap_binary=colmap_binary,
+    #     single_camera=False,
+    #     loop_detection=loop_detection,
+    #     from_db=os.path.join(colmap_out_dir, "database.db"),
+    #     db_only=False,
+    #     fix_image_pose=False,
+    #     verbose=verbose
+    # )
+
+    do_system((f"{colmap_binary}", "point_triangulator",
+               f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
+               f"--image_path={image_dir}",
+               f"--input_path={colmap_in_dir}",
+               f"--output_path={colmap_out_dir}",
+               f"--Mapper.ba_refine_principal_point=1",
+               f"--Mapper.ba_global_function_tolerance=0.000001",
+               f"--Mapper.fix_existing_images=0"), verbose)
+
+    db = from_colmap(image_dir, colmap_out_dir)
+    os.makedirs(os.path.join(out_dir, "images"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "masks"), exist_ok=True)
+    db.dump(
+        os.path.join(out_dir, "nuwa_db.json"),
+        copy_images_to=os.path.join(out_dir, "images"),
+        copy_masks_to=os.path.join(out_dir, "masks"),
         dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
     )
 
