@@ -23,10 +23,13 @@ pip install git+https://github.com/facebookresearch/segment-anything.git
 nuwa -v VIDEO_PATH -o OUT_DIR --fps 30
 
 # To process a folder of images:
-nuwa -i IMAGE_DIR -o OUT_DIR
+nuwa -i IMAGE_DIR -o OUT_DIR #--finetune-pose (optional)
 
 # To process a polycam zip / folder:
-nuwa -p polycam.zip -o OUT_DIR --portrait --object
+nuwa -p polycam.zip -o OUT_DIR --portrait --object #--finetune-pose (optional)
+
+# To process a 3dscannerapp zip / folder:
+nuwa -s polycam.zip -o OUT_DIR --object #--finetune-pose (optional)
 
 # To view all options:
 nuwa -h
@@ -41,8 +44,11 @@ db = nuwa.from_image_folder(img_dir)
 # db = nuwa.from_video(video_dir, out_img_dir)
 # db = nuwa.from_colmap(img_dir, colmap_dir)
 # db = nuwa.from_polycam(polycam_dir)
+# db = nuwa.from_3dscannerapp(3dscannerapp_dir)
 
 masks = db.calculate_object_mask(mask_save_dir, masked_image_save_dir)
+db.finetune_pose()
+
 db.dump("db.json")
 ```
 
@@ -52,7 +58,7 @@ Example:
 
 ```python
 {
-  "source": "colmap",                      # source of the data, choices [colmap, polycam]
+  "source": "colmap",                      # source of the data, choices [colmap, arkit]
   
   "up": [                                  # (Optional) up vector of the scene
     0.018489610893192888,
@@ -107,19 +113,21 @@ Example:
 
 ### colmap and other sfm pipelines
 1. `colmap` could be installed with `apt install -y colmap`. This version is CPU-only. To install the GPU version, please refer to `setup_pixsfm.sh:21` or the [official colmap installation guide](https://colmap.github.io/install.html).
-2. nuwa uses colmap from system path by default. If you have a different version of colmap, you can specify the path to the colmap executable using the `--colmap_path` argument.
+2. nuwa uses colmap from system path by default. If you have a different version of colmap, you can specify the path to the colmap executable using the `--colmap-binary` argument.
 3. To use a more advanced sfm pipeline (hloc, hloc++), you need to first install the required dependencies as shown in `setup_pixsfm.sh`.
 4. If you need the original colmap database/sparse estimation (e.g. for 3DGS pipelines), please pass `--colmap-dir` or `colmap_out_dir` explicitly. 
+
+### Fine-tuning pose
+1. If you have a rough estimate of the camera poses, you can pass `--finetune-pose` to refine the poses with instant-ngp. This requires the `instant-ngp` executable in your PATH.  
 
 ### Known issues 
 1. If you encountered any issue with `flann`, try running with `--no-loop-detection` or pass `colmap_loop_detection=False`. There is likely an issue with your system kernel.
 
 ### Segmentation
 1. The segmentation pipeline follows the *largest* object as the foreground. Make sure the object you want to segment is visible in the first frame and is the largest throughout the images.
-2. Pass `--no-gen-mask` to skip the segmentation step (for non-object scenes).
+2. Pass `--object` to indicate the scene needs normalization and segmentation.
 
 ## TODO
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
-- [ ] Pose optimization for polycam sourced data
 - [ ] More camera normalization options

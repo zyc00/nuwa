@@ -51,7 +51,7 @@ class NuwaDB:
 
         if self.source == "colmap":
             return up
-        elif self.source == "polycam":
+        elif self.source == "arkit":
             return np.array([0., 0., 1.])
         else:
             raise ValueError(f"Unknown source {self.source}")
@@ -279,13 +279,20 @@ class NuwaDB:
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
         refined_json = json.load(open(refined_json, "r"))
 
+        self.frames = sorted(self.frames, key=lambda x: x.image_path)
         for i, f in enumerate(self.frames):
             refined = refined_json[i]
             assert i == refined["id"]
-            assert int(os.path.basename(f.image_path).split(".")[0]) == i
 
-            pose = convert_camera_pose(
-                np.array(refined["transform_matrix"]), "blender", "cv")
+            pose = np.concatenate((np.array(refined["transform_matrix"]), np.array([[0, 0, 0, 1]])), axis=0)
+            pose = convert_camera_pose(pose, "blender", "cv")
+
+            err = f.pose @ np.linalg.inv(pose)
+            err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
+            err_t = np.linalg.norm(err[:3, 3])
+            if verbose:
+                print(f"Fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
+
             f.pose = pose
 
         self.colmap_reconstruction.update_poses_from_frames(self.frames)

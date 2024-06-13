@@ -201,7 +201,75 @@ def from_polycam(
     frames = sorted(frames, key=lambda x: x.image_path)
 
     return NuwaDB(
-        source="polycam",
+        source="arkit",
+        frames=frames,
+        colmap_reconstruction=Reconstruction.from_frames(frames)
+    )
+
+
+def from_3dscannerapp(
+        file_dir,
+        new_image_dir=None
+):
+    """
+        :param file_dir: path to 3dscannerapp directory or zip
+        :param new_image_dir: new image directory, will copy images if not None
+    """
+    if file_dir.endswith(".zip"):
+        assert new_image_dir is not None and new_image_dir != "", "new_image_dir is required for zip"
+        import zipfile
+        with zipfile.ZipFile(file_dir, 'r') as zip_ref:
+            file_dir = tempfile.mkdtemp()
+            zip_ref.extractall(file_dir)
+            file_dir = os.path.join(file_dir, os.listdir(file_dir)[0])
+
+    assert os.path.exists(file_dir), f"Directory {file_dir} does not exist"
+
+    if new_image_dir is not None:
+        os.makedirs(new_image_dir, exist_ok=True)
+
+    frames = []
+    w, h = None, None
+
+    for i in range(99999):
+        jpg_name = f"frame_{i:05}.jpg"
+        json_name = f"frame_{i:05}.json"
+
+        if not os.path.exists(os.path.join(file_dir, jpg_name)):
+            break
+
+        if w is None:
+            image = Image.open(os.path.join(file_dir, jpg_name))
+            w, h = image.size
+
+        camera_json = json.load(open(os.path.join(file_dir, json_name)))
+        pose = np.array(camera_json["cameraPoseARFrame"]).reshape(4, 4)
+        pose = convert_camera_pose(pose, "blender", "cv")
+
+        intrinsics = camera_json["intrinsics"]
+        image_path = os.path.abspath(os.path.join(file_dir, jpg_name))
+        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose
+
+        if new_image_dir is not None:
+            new_image_path = os.path.join(new_image_dir, os.path.basename(image_path))
+            shutil.copy2(image_path, new_image_path)
+            image_path = os.path.abspath(new_image_path)
+
+        camera = PinholeCamera(w, h, intrinsics[0], intrinsics[4], intrinsics[2], intrinsics[5])
+        frame = Frame(
+            camera=camera,
+            image_path=image_path,
+            org_path=image_path,
+            pose=pose,
+            seq_id=i,
+            sharpness_score=1/camera_json['motionQuality']
+        )
+        frames.append(frame)
+
+    frames = sorted(frames, key=lambda x: x.image_path)
+
+    return NuwaDB(
+        source="arkit",
         frames=frames,
         colmap_reconstruction=Reconstruction.from_frames(frames)
     )

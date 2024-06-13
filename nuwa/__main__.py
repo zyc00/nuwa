@@ -1,6 +1,6 @@
 import tempfile
 
-from nuwa import from_image_folder, from_video, from_polycam
+from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp
 
 
 def main():
@@ -11,8 +11,10 @@ def main():
                             help="Path to the video file")
         parser.add_argument("--image-dir", "-i", type=str, default="",
                             help="Path to the images / to expand the frames / to export the polycam images")
-        parser.add_argument("--polycam-dir", "-p", type=str, default="",
+        parser.add_argument("--polycam-path", "-p", type=str, default="",
                             help="Path to the polycam dir or zip")
+        parser.add_argument("--scannerapp-path", "-s", type=str, default="",
+                            help="Path to the 3dscannerapp dir or zip")
         parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
                             help="Output directory")
 
@@ -94,16 +96,22 @@ def main():
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
-    if args.polycam_dir:
-        polycam_image_out_dir = os.path.join(out_dir, "images") \
+    if args.polycam_path:
+        image_out_dir = os.path.join(out_dir, "images") \
             if args.image_dir == "" else args.image_dir
 
         db = from_polycam(
-            args.polycam_dir,
-            polycam_image_out_dir,
+            args.polycam_path,
+            image_out_dir,
             args.discard_border_rate,
             args.portrait
         )
+
+    elif args.scannerapp_path:
+        image_out_dir = os.path.join(out_dir, "images") \
+            if args.image_dir == "" else args.image_dir
+
+        db = from_3dscannerapp(args.scannerapp_path, image_out_dir)
 
     elif args.video_path:
         image_dir = args.image_dir
@@ -168,8 +176,9 @@ def main():
                 db.finetune_pose(args.ingp_binary, verbose=verbose)
 
         except ValueError as e:
-            print(f"ERROR Mask generation failed: {e}")
-            print("Continuing without mask generation")
+            print(f"ERROR: Mask generation failed: {e}")
+            print("ERROR: Continuing without mask generation")
+            db.normalize_cameras(positive_z=True, scale_factor=0.8)
 
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)

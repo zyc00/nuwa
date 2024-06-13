@@ -34,7 +34,7 @@ class Frame:
 
         self.sharpness = sharpness_score
         self.mask_path = mask_path
-        self.org_path = org_path
+        self.org_path = org_path if org_path else image_path
 
     def to_dict(self):
         ret = {
