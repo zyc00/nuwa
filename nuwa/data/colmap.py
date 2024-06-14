@@ -202,6 +202,7 @@ class Reconstruction:
         self._dump_images(output_folder)
 
         colmap_convert_model(output_folder, out_type="BIN")
+        self.export_point_cloud(os.path.join(output_folder, 'points3D.ply'))
 
     def export_point_cloud(self, path, write_text=False):
         if path.endswith('.ply'):

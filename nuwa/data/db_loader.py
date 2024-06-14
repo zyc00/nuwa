@@ -53,7 +53,7 @@ def from_reconstruction(
     return NuwaDB(
         source="colmap",
         frames=sorted(frames, key=lambda x: x.image_path),
-        colmap_reconstruction=deepcopy(reconstruction)
+        colmap_reconstruction=reconstruction
     )
 
 
@@ -262,7 +262,7 @@ def from_3dscannerapp(
             org_path=image_path,
             pose=pose,
             seq_id=i,
-            sharpness_score=1/camera_json['motionQuality']
+            sharpness_score=camera_json['motionQuality']
         )
         frames.append(frame)
 

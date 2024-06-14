@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+from copy import deepcopy
 from typing import List
 
 import cv2
@@ -11,6 +12,8 @@ from PIL import Image
 
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
+from nuwa.utils.colmap_utils import run_colmap
+from nuwa.utils.dmv_utils import utils_3d
 from nuwa.utils.os_utils import do_system
 from nuwa.utils.pose_utils import convert_camera_pose
 
@@ -25,7 +28,7 @@ class NuwaDB:
     def __init__(self, source="", frames=None, colmap_reconstruction=None):
         self.source = source
         self.frames = [] if frames is None else frames
-        self.colmap_reconstruction = colmap_reconstruction
+        self.colmap_reconstruction = deepcopy(colmap_reconstruction)
         self.scale_denorm = None
 
     def __repr__(self):
@@ -299,12 +302,14 @@ class NuwaDB:
         self.colmap_reconstruction.update_poses_from_frames(self.frames)
         shutil.rmtree(tmp_dump)
 
-    def finetune_pose_colmap(self,
-                      matcher="exhaustive",
-                      colmap_binary="colmap",
-                      single_camera=True,
-                      loop_detection=True,
-                      verbose=True):
+    def finetune_pose_colmap(
+            self,
+            matcher="exhaustive",
+            colmap_binary="colmap",
+            single_camera=True,
+            loop_detection=True,
+            verbose=True
+    ):
         """
         Return a new database with the poses fine-tuned using colmap
 
@@ -316,52 +321,67 @@ class NuwaDB:
         :return:
         """
 
-        raise NotImplementedError("This function is not implemented yet")
-        #
-        # if self.colmap_reconstruction is None:
-        #     raise ValueError("No colmap reconstruction found")
-        #
-        # if self.source == "colmap":
-        #     print("WARNING: fine-tuning with colmap on a colmap sourced database")
-        #
-        # colmap_in_dir = tempfile.mkdtemp()
-        # self.dump_reconstruction(colmap_in_dir)
-        # colmap_out_dir = tempfile.mkdtemp()
-        #
-        # run_colmap(
-        #     image_dir=self.colmap_reconstruction.image_dir,
-        #     out_dir=colmap_out_dir,
-        #     matcher=matcher,
-        #     camera_model=self.frames[0].camera.type,
-        #     heuristics=','.join(map(str, self.frames[0].camera.params)),
-        #     colmap_binary=colmap_binary,
-        #     single_camera=single_camera,
-        #     loop_detection=loop_detection,
-        #     from_db=None,
-        #     db_only=True,
-        #     verbose=verbose
-        # )
-        #
-        # shutil.rmtree(colmap_in_dir)
-        # self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
-        #
-        # colmap_in_dir = tempfile.mkdtemp()
-        # self.dump_reconstruction(colmap_in_dir)
-        #
-        # run_colmap(
-        #     image_dir=self.colmap_reconstruction.image_dir,
-        #     out_dir=colmap_out_dir,
-        #     in_dir=colmap_in_dir,
-        #     matcher=matcher,
-        #     camera_model=self.frames[0].camera.type,
-        #     heuristics=','.join(map(str, self.frames[0].camera.params)),
-        #     colmap_binary=colmap_binary,
-        #     single_camera=single_camera,
-        #     loop_detection=loop_detection,
-        #     from_db=os.path.join(colmap_out_dir, "database.db"),
-        #     db_only=False,
-        #     verbose=verbose
-        # )
-        #
-        # from nuwa import from_colmap
-        # return from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))
+        print("WARNING: fine-tuning with colmap, this is known to be useless")
+
+        if self.colmap_reconstruction is None:
+            raise ValueError("No colmap reconstruction found")
+
+        if self.source == "colmap":
+            print("WARNING: fine-tuning with colmap on a colmap sourced database")
+
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+        colmap_out_dir = tempfile.mkdtemp()
+
+        run_colmap(
+            image_dir=self.colmap_reconstruction.image_dir,
+            out_dir=colmap_out_dir,
+            matcher=matcher,
+            camera_model=self.frames[0].camera.type,
+            heuristics=','.join(map(str, self.frames[0].camera.params)),
+            colmap_binary=colmap_binary,
+            single_camera=single_camera,
+            loop_detection=loop_detection,
+            from_db=None,
+            db_only=True,
+            verbose=verbose
+        )
+
+        shutil.rmtree(colmap_in_dir)
+        self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
+
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+
+        do_system((f"{colmap_binary}", "point_triangulator",
+                   f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
+                   f"--image_path={self.colmap_reconstruction.image_dir}",
+                   f"--input_path={colmap_in_dir}",
+                   f"--output_path={colmap_out_dir}",
+                   f"--Mapper.ba_refine_principal_point=1",
+                   f"--Mapper.ba_global_function_tolerance=0.000001",
+                   f"--Mapper.fix_existing_images=1"), verbose)
+
+        run_colmap(
+            image_dir=self.colmap_reconstruction.image_dir,
+            out_dir=colmap_out_dir,
+            in_dir=colmap_out_dir,
+            matcher=matcher,
+            camera_model=self.frames[0].camera.type,
+            heuristics=','.join(map(str, self.frames[0].camera.params)),
+            colmap_binary=colmap_binary,
+            single_camera=single_camera,
+            loop_detection=loop_detection,
+            from_db=os.path.join(colmap_out_dir, "database.db"),
+            db_only=False,
+            verbose=verbose
+        )
+
+        from nuwa import from_colmap
+        new_db = from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))
+        for f in new_db.frames:
+            f.pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ f.pose
+
+        self.frames = new_db.frames
+        self.colmap_reconstruction = new_db.colmap_reconstruction
+        self.scale_denorm = new_db.scale_denorm

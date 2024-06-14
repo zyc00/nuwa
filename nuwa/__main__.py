@@ -28,9 +28,11 @@ def main():
                             help="For polycam, indicating images should be portrait (rot90)")
 
         parser.add_argument("--finetune-pose", action="store_true",
-                            help="Fine-tune pose with colmap, requiring normalized scenes")
+                            help="Fine-tune pose with ingp, requiring normalized scenes")
         parser.add_argument("--ingp-binary", type=str, default="instant-ngp",
                             help="Path to the instant-ngp binary")
+        parser.add_argument("--finetune-pose-colmap", action="store_true",
+                            help="Fine-tune pose with colmap")
 
         parser.add_argument("--normalize", action="store_true",
                             help="Normalize cameras into (-1, 1)")
@@ -100,22 +102,32 @@ def main():
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
-    if args.polycam_path:
+    if args.polycam_path or args.scannerapp_path:
         image_out_dir = os.path.join(out_dir, "images") \
             if args.image_dir == "" else args.image_dir
 
-        db = from_polycam(
-            args.polycam_path,
-            image_out_dir,
-            args.discard_border_rate,
-            args.portrait
-        )
+        if args.polycam_path:
+            db = from_polycam(
+                args.polycam_path,
+                image_out_dir,
+                args.discard_border_rate,
+                args.portrait
+            )
 
-    elif args.scannerapp_path:
-        image_out_dir = os.path.join(out_dir, "images") \
-            if args.image_dir == "" else args.image_dir
+        else:
+            db = from_3dscannerapp(
+                args.scannerapp_path,
+                image_out_dir
+            )
 
-        db = from_3dscannerapp(args.scannerapp_path, image_out_dir)
+        if args.finetune_pose_colmap:
+            db.finetune_pose_colmap(
+                matcher="exhaustive",
+                colmap_binary=colmap_binary,
+                single_camera=True,
+                loop_detection=True,
+                verbose=verbose
+            )
 
     elif args.video_path:
         image_dir = args.image_dir
@@ -259,22 +271,6 @@ def colmap():
     shutil.rmtree(colmap_in_dir)
     colmap_in_dir = tempfile.mkdtemp()
     db.dump_reconstruction(colmap_in_dir)
-
-    # run_colmap(
-    #     image_dir=image_dir,
-    #     out_dir=colmap_out_dir,
-    #     in_dir=colmap_in_dir,
-    #     matcher="exhaustive",
-    #     camera_model="PINHOLE",
-    #     heuristics=heuristics,
-    #     colmap_binary=colmap_binary,
-    #     single_camera=False,
-    #     loop_detection=loop_detection,
-    #     from_db=os.path.join(colmap_out_dir, "database.db"),
-    #     db_only=False,
-    #     fix_image_pose=False,
-    #     verbose=verbose
-    # )
 
     do_system((f"{colmap_binary}", "point_triangulator",
                f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
