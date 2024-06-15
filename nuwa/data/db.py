@@ -214,7 +214,9 @@ class NuwaDB:
             masks = np.array(masks)
             ks = np.array([f.camera.intrinsic_matrix for f in self.frames])
             camera_poses = np.array([f.pose for f in self.frames])
-            camera_poses, scale = scene_carving(masks, ks, camera_poses)
+            camera_poses, center, scale = scene_carving(masks, ks, camera_poses)
+            self.colmap_reconstruction.world_translate(-center)
+            self.colmap_reconstruction.world_scale(scale)
             self.scale_denorm *= scale
             images, ks, masks = crop_images(images, masks, ks)
 
@@ -240,6 +242,8 @@ class NuwaDB:
             mask_path = os.path.join(mask_save_dir, f"{i:06d}.png")
             Image.fromarray(mask).save(mask_path)
             self.frames[i].mask_path = mask_path
+
+        # TODO: filter points w.r.t. masks
 
         return masks
 

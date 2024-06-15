@@ -208,7 +208,7 @@ class Reconstruction:
         if path.endswith('.ply'):
             points = np.array([point['xyz'] for point in self.points.values()])
             colors = np.array([point['rgb'] for point in self.points.values()])
-            points = np.hstack([points, colors / 255.0])
+            points = np.hstack([points, colors])
 
             vertices = []
             for i, point in enumerate(points):

@@ -77,7 +77,7 @@ def scene_carving(masks, Ks, camera_poses):
     # print(pts_valid.max(0), pts_valid.min(0))
     camera_poses[:, :3, 3] *= scale
 
-    return camera_poses, scale
+    return camera_poses, center, scale
 
 
 def crop_images(images, masks, Ks, out_size=512, pad_margin=0.1):
