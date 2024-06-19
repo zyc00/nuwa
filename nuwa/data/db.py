@@ -310,7 +310,6 @@ class NuwaDB:
             self,
             matcher="exhaustive",
             colmap_binary="colmap",
-            single_camera=True,
             loop_detection=True,
             verbose=True
     ):
@@ -319,7 +318,6 @@ class NuwaDB:
 
         :param matcher:
         :param colmap_binary:
-        :param single_camera:
         :param loop_detection:
         :param verbose:
         :return:
@@ -336,6 +334,8 @@ class NuwaDB:
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
         colmap_out_dir = tempfile.mkdtemp()
+
+        single_camera = (len(self.colmap_reconstruction.cameras) == 1)
 
         run_colmap(
             image_dir=self.colmap_reconstruction.image_dir,
@@ -362,9 +362,11 @@ class NuwaDB:
                    f"--image_path={self.colmap_reconstruction.image_dir}",
                    f"--input_path={colmap_in_dir}",
                    f"--output_path={colmap_out_dir}",
-                   f"--Mapper.ba_refine_principal_point=1",
+                   f"--Mapper.ba_refine_focal_length={int(single_camera)}",
+                   f"--Mapper.ba_refine_principal_point={int(single_camera)}",
+                   f"--Mapper.ba_refine_extra_params={int(single_camera)}",
                    f"--Mapper.ba_global_function_tolerance=0.000001",
-                   f"--Mapper.fix_existing_images=1"), verbose)
+                   f"--Mapper.fix_existing_images=0"), verbose)
 
         run_colmap(
             image_dir=self.colmap_reconstruction.image_dir,
@@ -378,6 +380,8 @@ class NuwaDB:
             loop_detection=loop_detection,
             from_db=os.path.join(colmap_out_dir, "database.db"),
             db_only=False,
+            fix_image_pose=False,
+            fix_intrinsics=not single_camera,
             verbose=verbose
         )
 

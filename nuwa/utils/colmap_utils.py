@@ -20,6 +20,7 @@ def run_colmap(
         from_db: str | None = None,
         db_only: bool = False,
         fix_image_pose: bool = False,
+        fix_intrinsics: bool = False,
         verbose: bool = False
 ):
     start_time = time.time()
@@ -33,6 +34,7 @@ def run_colmap(
     with_cuda = int(not os.system(f'{colmap_binary} -h | grep "with CUDA" -q'))
     single_camera = int(single_camera)
     fix_image_pose = int(fix_image_pose)
+    fix_intrinsics = int(fix_intrinsics)
 
     os.makedirs(out_dir, exist_ok=True)
     sparse = os.path.join(out_dir, "sparse")
@@ -74,7 +76,9 @@ def run_colmap(
                        f"--database_path={db}",
                        f"--image_path={image_dir}",
                        f"--output_path={sparse}",
-                       f"--Mapper.ba_refine_principal_point=1",
+                       f"--Mapper.ba_refine_focal_length={1-int(fix_intrinsics)}",
+                       f"--Mapper.ba_refine_principal_point={1-int(fix_intrinsics)}",
+                       f"--Mapper.ba_refine_extra_params={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_global_function_tolerance=0.000001"), verbose)
             sparse = os.path.join(sparse, "0")
 
@@ -84,14 +88,18 @@ def run_colmap(
                        f"--image_path={image_dir}",
                        f"--input_path={in_dir}",
                        f"--output_path={sparse}",
-                       f"--Mapper.ba_refine_principal_point=1",
+                       f"--Mapper.ba_refine_focal_length={1-int(fix_intrinsics)}",
+                       f"--Mapper.ba_refine_principal_point={1-int(fix_intrinsics)}",
+                       f"--Mapper.ba_refine_extra_params={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_global_function_tolerance=0.000001",
                        f"--Mapper.fix_existing_images={fix_image_pose}"), verbose)
 
         do_system((f"{colmap_binary}", "bundle_adjuster",
                    f"--input_path={sparse}",
                    f"--output_path={sparse}",
+                   f"--BundleAdjustment.refine_focal_length=1",     # on for all cases
                    f"--BundleAdjustment.refine_principal_point=1",
+                   f"--BundleAdjustment.refine_extra_params=1",
                    f"--BundleAdjustment.function_tolerance=0.000001"), verbose)
 
         do_system((f"{colmap_binary}", "model_converter",

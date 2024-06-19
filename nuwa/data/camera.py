@@ -2,6 +2,8 @@ import abc
 import math
 from typing import List
 
+import numpy as np
+
 
 class _Camera:
     w: float
@@ -40,6 +42,10 @@ class _Camera:
 
     def __repr__(self):
         return self.to_dict().__repr__()
+
+    @abc.abstractmethod
+    def __eq__(self, other):
+        raise NotImplementedError
 
 
 class OpenCvCamera(_Camera):
@@ -89,6 +95,13 @@ class OpenCvCamera(_Camera):
             "camera_param_model": "OPENCV"
         }
 
+    def __eq__(self, other):
+        assert isinstance(other, OpenCvCamera)
+        return np.allclose(
+            np.array([self.w, self.h, self.fx, self.fy, self.cx, self.cy, self.k1, self.k2, self.p1, self.p2]),
+            np.array([other.w, other.h, other.fx, other.fy, other.cx, other.cy, other.k1, other.k2, other.p1, other.p2])
+        )
+
 
 class PinholeCamera(_Camera):
     def __init__(self, w, h, fx, fy, cx, cy):
@@ -128,3 +141,10 @@ class PinholeCamera(_Camera):
 
             "camera_param_model": "PINHOLE"
         }
+
+    def __eq__(self, other):
+        assert isinstance(other, PinholeCamera)
+        return np.allclose(
+            np.array([self.w, self.h, self.fx, self.fy, self.cx, self.cy]),
+            np.array([other.w, other.h, other.fx, other.fy, other.cx, other.cy])
+        )

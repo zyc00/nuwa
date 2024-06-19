@@ -124,7 +124,6 @@ def main():
             db.finetune_pose_colmap(
                 matcher="exhaustive",
                 colmap_binary=colmap_binary,
-                single_camera=True,
                 loop_detection=True,
                 verbose=verbose
             )
@@ -202,7 +201,7 @@ def main():
             db.finetune_pose(args.ingp_binary, verbose=verbose)
 
     elif args.finetune_pose:
-        print("WARNING: Pose fine-tuning requires object scene or normalization.")
+        print("WARNING: Pose fine-tuning with ingp requires object scene or normalization.")
         print("WARNING: Skipping pose fine-tuning...")
 
     db.dump(

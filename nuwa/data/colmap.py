@@ -48,20 +48,24 @@ class Reconstruction:
         obj.points = points
         obj.images = images
         obj.image_dir = image_dir
+
+        print(f"INFO: {len(cameras)} cameras, {len(points)} points, {len(images)} images "
+              f"loaded to colmap reconstruction.")
+
         return obj
 
     @classmethod
     def from_frames(cls, frames: List[Frame]):
         nuwa_cameras = [f.camera for f in frames]
 
-        cameras = {}
+        cameras = []
+        f2c = {}
         for i, camera in enumerate(nuwa_cameras):
-            cameras[i] = {
-                "model": camera.type,
-                "width": camera.w,
-                "height": camera.h,
-                "params": camera.params
-            }
+            if camera in cameras:
+                f2c[i] = cameras.index(camera)
+            else:
+                cameras.append(camera)
+                f2c[i] = len(cameras) - 1
 
         points = {}
 
@@ -77,7 +81,7 @@ class Reconstruction:
             Rt = np.linalg.inv(frame.pose)
 
             images[i] = {
-                "camera_id": i,
+                "camera_id": f2c[i],
                 "name": os.path.basename(frame.image_path),
                 "xys": np.zeros((0, 2), dtype=float),
                 "point_ids": np.array([], dtype=int),
@@ -85,7 +89,8 @@ class Reconstruction:
                 "qvec": -rotmat2qvec(Rt[:3, :3]),
             }
 
-        return cls.from_data(cameras, points, images, image_dir)
+        return cls.from_data({i: {"model": c.type, "width": c.w, "height": c.h, "params": c.params}
+                              for i, c in enumerate(cameras)}, points, images, image_dir)
 
     def update_poses_from_frames(self, frames: List[Frame]):
         for i, frame in enumerate(frames):
