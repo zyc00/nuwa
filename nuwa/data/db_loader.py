@@ -2,8 +2,7 @@ import json
 import os
 import shutil
 import tempfile
-from copy import deepcopy
-
+import tqdm
 import numpy as np
 from PIL import Image
 
@@ -13,8 +12,10 @@ from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, colmap_undistort_images
 from nuwa.utils.dmv_utils import utils_3d
-from nuwa.utils.image_utils import center_crop_and_update_intrinsics
-from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices
+from nuwa.utils.image_utils import center_crop_and_update_intrinsics, sharpness
+from nuwa.utils.os_utils import do_system
+from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices, \
+    get_rot90a_camera_matrices
 from nuwa.utils.video_utils import run_ffmpeg
 
 
@@ -275,6 +276,113 @@ def from_3dscannerapp(
     )
 
 
+def from_dear(
+        file_path,
+        out_frame_dir,
+        should_be_portrait=False,
+        sample_stride=1,
+        verbose=False
+):
+    """
+        (beta) load from dear zip or folder
+        :param file_path: path to dear directory or zip
+        :param out_frame_dir: output frame directory
+        :param should_be_portrait: if the captured data should be portrait or not
+        :param sample_stride: sample stride
+        :param verbose: verbose
+    """
+    print("WARNING: DEAR importer seems to be buggy, please use with caution.")
+    print("WARNING: This is a beta feature.")
+
+    if file_path.endswith(".zip"):
+        import zipfile
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            file_path = tempfile.mkdtemp()
+            zip_ref.extractall(file_path)
+
+    img_dir = os.path.join(file_path, "frames")
+    os.makedirs(img_dir, exist_ok=True)
+
+    # find all mp4 in file_path
+    mp4_files = [f for f in os.listdir(file_path) if (f.endswith(".mp4") and not f.endswith("_depth.mp4"))]
+    if len(mp4_files) == 0:
+        raise ValueError("No sequence (.mp4) found in the directory")
+    if len(mp4_files) > 1:
+        raise ValueError("Multiple sequences (.mp4) found in the directory")
+
+    sequence_file = os.path.abspath(os.path.join(file_path, mp4_files[0]))
+    if os.path.exists(out_frame_dir):
+        print("WARNING: output frame directory exists, overwriting...")
+
+    os.makedirs(out_frame_dir, exist_ok=True)
+
+    metadata = json.load(open(os.path.join(file_path, sequence_file.replace(".mp4", "_pose.json"))))
+    print(f"INFO: Found {len(metadata['frames'])} frames in the sequence")
+
+    w, h = metadata['width'], metadata['height']
+    data = metadata['frames'][::sample_stride]
+
+    frames = []
+    for i, f in enumerate(tqdm.tqdm(data)):
+
+        transform = np.array(f['transform']).T
+        time = f['time']
+        intrinsic = np.array(f['intrinsic']).T
+
+        frame_path = os.path.join(out_frame_dir, f'{i:04d}.png')
+
+        timestamp = np.round(time * 1000)
+        str_hour = str(int(timestamp / 3600000)).zfill(2)
+        str_min = str(int(int(timestamp % 3600000) / 60000)).zfill(2)
+        str_sec = str(int(int(int(timestamp % 3600000) % 60000) / 1000)).zfill(2)
+        str_mill = str(int(int(int(timestamp % 3600000) % 60000) % 1000)).zfill(3)
+        str_timestamp = str_hour+":"+str_min+":"+str_sec+"."+str_mill
+
+        try:
+            do_system([
+                'ffmpeg', '-y', '-ss', str_timestamp, '-i', sequence_file, '-vframes', '1', '-f', 'image2', frame_path
+            ], verbose=verbose)
+        except Exception as e:
+            print(f"ERROR: fail to process {sequence_file}: {e}")
+            shutil.rmtree(out_frame_dir)
+            raise
+
+        fx, fy, cx, cy = intrinsic[0, 0], intrinsic[1, 1], intrinsic[0, 2], intrinsic[1, 2]
+        pose = convert_camera_pose(transform, "blender", "cv")
+        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose  # fix up
+
+        image = Image.open(frame_path)
+        if should_be_portrait:
+            # image = image.rotate(90, expand=True)
+            # image.save(frame_path)
+            # image = image.rotate(270, expand=True)
+            # image.save(frame_path)
+            pose, fx, fy, cx, cy = get_rot90a_camera_matrices(pose, fx, fy, cx, cy, h)
+            h, w = w, h
+            pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+
+        camera = PinholeCamera(w, h, fx, fy, cx, cy)
+        image_path = os.path.abspath(frame_path)
+
+        frame = Frame(
+            camera=camera,
+            image_path=image_path,
+            org_path=image_path,
+            pose=pose,
+            seq_id=i,
+            sharpness_score=sharpness(image)
+        )
+        frames.append(frame)
+
+    frames = sorted(frames, key=lambda x: x.image_path)
+
+    return NuwaDB(
+        source="arkit",
+        frames=frames,
+        colmap_reconstruction=Reconstruction.from_frames(frames)
+    )
+
+
 def from_nuwadb(path):
     db = json.load(open(path))
     frames = sorted([Frame.from_dict(f) for f in db["frames"]], key=lambda x: x.image_path)
@@ -296,7 +404,7 @@ def from_image_folder(
         undistort_image_dir="",
         colmap_out_dir="",
         colmap_binary="colmap",
-        colmap_loop_detection=False,
+        colmap_loop_detection=True,
         hloc_max_keypoints=20000,
         hloc_use_pixsfm=False,
         verbose=False
@@ -400,6 +508,7 @@ def from_video(
         camera_run_undistort=True,
         colmap_out_dir="",
         colmap_binary="colmap",
+        colmap_loop_detection=True,
         hloc_max_keypoints=20000,
         hloc_use_pixsfm=False,
         verbose=False
@@ -415,6 +524,7 @@ def from_video(
     :param camera_run_undistort: run undistort on images
     :param colmap_out_dir: output directory for colmap data
     :param colmap_binary: path to colmap binary
+    :param colmap_loop_detection: run loop detection in colmap
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
     :param verbose: verbose
@@ -436,6 +546,7 @@ def from_video(
         camera_run_undistort=camera_run_undistort,
         colmap_out_dir=colmap_out_dir,
         colmap_binary=colmap_binary,
+        colmap_loop_detection=colmap_loop_detection,
         hloc_max_keypoints=hloc_max_keypoints,
         hloc_use_pixsfm=hloc_use_pixsfm,
         verbose=verbose

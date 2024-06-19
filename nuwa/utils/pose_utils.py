@@ -1,5 +1,7 @@
 import numpy as np
 
+from nuwa.utils.dmv_utils import utils_3d
+
 
 def convert_camera_pose(pose, in_type, out_type):
     accepted_types = ["cv", "gl", "blender"]
@@ -94,6 +96,28 @@ def get_rot90_camera_matrices(pose, fx, fy, cx, cy, h):
                                        [-1, 0, 0, 0],
                                        [0, 0, 1, 0],
                                        [0, 0, 0, 1]])
+    nfx = fy
+    nfy = fx
+    ncx = h - cy
+    ncy = cx
+
+    return new_pose_matrix, nfx, nfy, ncx, ncy
+
+
+def get_rot90a_camera_matrices(pose, fx, fy, cx, cy, h):
+    """
+    Get camera matrices for rotating image 90 degrees anti-clockwise
+
+    :param pose: camera pose matrix
+    :param fx
+    :param fy
+    :param cx
+    :param cy
+    :param h: original image height
+    :return:
+    """
+    new_pose_matrix = pose @ utils_3d.Rt_to_pose(utils_3d.rotz_np(-np.pi / 2)[0])
+
     nfx = fy
     nfy = fx
     ncx = h - cy

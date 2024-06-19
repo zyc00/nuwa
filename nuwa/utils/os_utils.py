@@ -2,8 +2,8 @@ import subprocess
 
 
 def do_system(arg, verbose=False):
-    print(f"-> Running: {arg}")
     if verbose:
+        print(f"-> Running: {arg}")
         subprocess.check_call(arg)
     else:
         subprocess.check_call(

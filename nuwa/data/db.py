@@ -47,7 +47,7 @@ class NuwaDB:
         up = up / np.linalg.norm(up)
 
         # check if close to (0, 0, 1)
-        if np.abs(up[2]) < 0.9:
+        if up[2] < 0.95:
             print(f"WARNING: avg up {tuple(up)} is not close to +z, please check if the extrinsics are correct.")
         else:
             print(f"INFO: avg up {tuple(up)}")
@@ -281,7 +281,7 @@ class NuwaDB:
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        print(f"INFO: please use GUI to perform extrinsic optimization and dump pose (no quat)`")
+        print(f"INFO: please use GUI to perform extrinsic optimization and dump pose now (select no quat)`")
         do_system((ingp_binary, tmp_json, "--no-train"), verbose=verbose)
 
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
@@ -357,6 +357,7 @@ class NuwaDB:
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
 
+        print("INFO: colmap - point triangulation")
         do_system((f"{colmap_binary}", "point_triangulator",
                    f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                    f"--image_path={self.colmap_reconstruction.image_dir}",

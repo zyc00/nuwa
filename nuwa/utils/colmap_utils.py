@@ -46,10 +46,11 @@ def run_colmap(
         os.makedirs(cache_dir, exist_ok=True)
         vocab_path = os.path.join(cache_dir, 'vocab.bin')
         if matcher == "sequential" and loop_detection and not os.path.exists(vocab_path):
-            print("downloading vocab tree")
+            print("INFO: colmap - downloading vocab tree")
             do_system(("wget", "-O", f"{vocab_path}",
                        "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
 
+        print(f"INFO: colmap - feature extraction ({camera_model=}, {single_camera=}, {heuristics=}, {with_cuda=})")
         do_system((f"{colmap_binary}", "feature_extractor",
                    f"--ImageReader.camera_model={camera_model}",
                    f"--SiftExtraction.estimate_affine_shape=true",
@@ -60,6 +61,7 @@ def run_colmap(
                    f"--image_path={image_dir}") + (() if heuristics is None else
                   (f"--ImageReader.camera_params={heuristics}",)), verbose)
 
+        print(f"INFO: colmap - feature matching ({matcher=}, {loop_detection=})")
         do_system((f"{colmap_binary}", f"{matcher}_matcher",
                    f"--SiftMatching.guided_matching=true",
                    f"--SiftMatching.use_gpu={with_cuda}",
@@ -72,6 +74,7 @@ def run_colmap(
 
     if not db_only:
         if in_dir is None:
+            print(f"INFO: colmap - mapping ({fix_intrinsics=})")
             do_system((f"{colmap_binary}", "mapper",
                        f"--database_path={db}",
                        f"--image_path={image_dir}",
@@ -83,6 +86,7 @@ def run_colmap(
             sparse = os.path.join(sparse, "0")
 
         else:
+            print(f"INFO: colmap - mapping ({fix_intrinsics=})")
             do_system((f"{colmap_binary}", "mapper",
                        f"--database_path={db}",
                        f"--image_path={image_dir}",
@@ -94,6 +98,7 @@ def run_colmap(
                        f"--Mapper.ba_global_function_tolerance=0.000001",
                        f"--Mapper.fix_existing_images={fix_image_pose}"), verbose)
 
+        print("INFO: colmap - bundle adjustment (refine_intrinsics=True)")
         do_system((f"{colmap_binary}", "bundle_adjuster",
                    f"--input_path={sparse}",
                    f"--output_path={sparse}",
@@ -102,12 +107,13 @@ def run_colmap(
                    f"--BundleAdjustment.refine_extra_params=1",
                    f"--BundleAdjustment.function_tolerance=0.000001"), verbose)
 
+        print("INFO: colmap - model conversion")
         do_system((f"{colmap_binary}", "model_converter",
                    f"--input_path={sparse}",
                    f"--output_path={sparse}",
                    f"--output_type=TXT"), verbose)
 
-    print(f"colmap finished in {time.time() - start_time:.2f} seconds")
+    print(f"INFO: colmap - finished in {time.time() - start_time:.2f} seconds")
 
 
 def run_hloc(
@@ -247,6 +253,7 @@ def colmap_convert_model(camera_dir, out_dir=None, out_type="TXT", colmap_binary
     if out_dir is None:
         out_dir = camera_dir
 
+    print("INFO: colmap - model conversion")
     do_system((f"{colmap_binary}", "model_converter",
                f"--input_path={camera_dir}",
                f"--output_path={out_dir}",
@@ -255,13 +262,14 @@ def colmap_convert_model(camera_dir, out_dir=None, out_type="TXT", colmap_binary
 
 def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colmap", verbose=False):
     """
-    Undistort images using the camera parameters from COLMAP.
+    Undistort images using the camera parameters from colmap.
     args:
         image_dir: str, path to the images
-        sparse_dir: str, path to the COLMAP sparse directory (PROJ/sparse/0)
+        sparse_dir: str, path to the colmap sparse directory (PROJ/sparse/0)
         out_dir: str, path to the output directory
-        colmap_binary: str, path to the COLMAP binary
+        colmap_binary: str, path to the colmap binary
     """
+    print("INFO: colmap - image undistortion")
     do_system((f"{colmap_binary}", "image_undistorter",
                f"--image_path={image_dir}",
                f"--input_path={sparse_dir}",
@@ -280,7 +288,7 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
 
 def get_name2id_from_colmap_db(path, verbose=False):
     """
-    Read the COLMAP database file.
+    Read the colmap database file.
     args:
     path
     """

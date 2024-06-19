@@ -7,6 +7,8 @@ def run_ffmpeg(video_path, out_image_dir, fps, verbose=False):
     fps = float(fps)
 
     os.makedirs(out_image_dir, exist_ok=True)
+
+    print(f"INFO: ffmpeg - extracting frames from {video_path} to {out_image_dir}")
     do_system((f"{ffmpeg_binary}",
                "-i", f"{video_path}",
                "-qscale:v", "1",

@@ -2,7 +2,7 @@ import shutil
 import sys
 import tempfile
 
-from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap
+from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap, from_dear
 from nuwa.utils.colmap_utils import run_colmap
 from nuwa.utils.os_utils import do_system
 
@@ -19,10 +19,13 @@ def main():
                             help="Path to the polycam dir or zip")
         parser.add_argument("--scannerapp-path", "-s", type=str, default="",
                             help="Path to the 3dscannerapp dir or zip")
+        parser.add_argument("--dear-path", "-d", type=str, default="",
+                            help="Path to the DEAR dir or zip")
         parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
                             help="Output directory")
 
         parser.add_argument("--fps", type=int, default=3, help="FPS for video inputs")
+        parser.add_argument("--dear-sample-stride", type=int, default=1, help="Stride for DEAR frame sampling")
         parser.add_argument("--discard-border-rate", type=float, default=0.0)
         parser.add_argument("--portrait", action="store_true",
                             help="For polycam, indicating images should be portrait (rot90)")
@@ -44,9 +47,9 @@ def main():
         parser.add_argument("--camera-heuristics", "-c", type=str, default=None,
                             help="Camera heuristics")
         parser.add_argument("--colmap-binary", type=str, default="colmap",
-                            help="Path to the COLMAP binary")
+                            help="Path to the colmap binary")
         parser.add_argument("--colmap-dir", type=str, default=None,
-                            help="Path to the COLMAP outputs")
+                            help="Path to the colmap outputs")
         parser.add_argument("--no-loop-detection", action="store_true",
                             help="Disable loop detection in colmap")
 
@@ -74,7 +77,7 @@ def main():
 
     out_dir = args.out_dir
     if os.path.exists(out_dir):
-        print("WARNING: Output directory exists, overwriting")
+        print("WARNING: Output directory exists, overwriting...")
     os.makedirs(out_dir, exist_ok=True)
 
     verbose = args.verbose
@@ -87,6 +90,7 @@ def main():
     undistort = not args.no_undistort
     if gen_mask:
         assert camera_model == "OPENCV" and undistort
+    copy_images_to = None
 
     if args.model == "colmap":
         model = "colmap"
@@ -102,7 +106,7 @@ def main():
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
-    if args.polycam_path or args.scannerapp_path:
+    if args.polycam_path or args.scannerapp_path or args.dear_path:
         image_out_dir = os.path.join(out_dir, "images") \
             if args.image_dir == "" else args.image_dir
 
@@ -114,10 +118,18 @@ def main():
                 args.portrait
             )
 
-        else:
+        elif args.scannerapp_path:
             db = from_3dscannerapp(
                 args.scannerapp_path,
                 image_out_dir
+            )
+        else:
+            db = from_dear(
+                args.dear_path,
+                image_out_dir,
+                args.portrait,
+                args.dear_sample_stride,
+                verbose
             )
 
         if args.finetune_pose_colmap:
@@ -148,6 +160,8 @@ def main():
             hloc_use_pixsfm=hloc_use_pixsfm,
             verbose=verbose
         )
+
+        copy_images_to = os.path.join(out_dir, "images")
 
     else:
         assert args.image_dir != "", "Image directory or video path is required"
@@ -187,6 +201,8 @@ def main():
                 copy_org=True
             )
 
+            copy_images_to = None
+
             if args.finetune_pose:
                 db.finetune_pose(args.ingp_binary, verbose=verbose)
 
@@ -206,7 +222,8 @@ def main():
 
     db.dump(
         os.path.join(out_dir, "nuwa_db.json"),
-        dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
+        dump_reconstruction_to=os.path.join(out_dir, "sparse/0"),
+        copy_images_to=copy_images_to
     )
 
     with open(os.path.join(out_dir, "argv.txt"), "w") as f:
@@ -224,7 +241,7 @@ def colmap():
                             help="Path to the output dir")
 
         parser.add_argument("--colmap-binary", type=str, default="colmap",
-                            help="Path to the COLMAP binary")
+                            help="Path to the colmap binary")
 
         parser.add_argument("--no-loop-detection", action="store_true",
                             help="Disable loop detection in colmap")
@@ -271,6 +288,7 @@ def colmap():
     colmap_in_dir = tempfile.mkdtemp()
     db.dump_reconstruction(colmap_in_dir)
 
+    print("INFO: colmap - Triangulating points...")
     do_system((f"{colmap_binary}", "point_triangulator",
                f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                f"--image_path={image_dir}",
