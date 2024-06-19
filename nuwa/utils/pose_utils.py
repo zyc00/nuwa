@@ -80,7 +80,7 @@ def rotmat2qvec(R):
     return qvec
 
 
-def get_rot90_camera_matrices(pose, fx, fy, cx, cy, h):
+def get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h):
     """
     Get camera matrices for rotating image 90 degrees clockwise
 
@@ -89,6 +89,7 @@ def get_rot90_camera_matrices(pose, fx, fy, cx, cy, h):
     :param fy
     :param cx
     :param cy
+    :param w: original image width
     :param h: original image height
     :return:
     """
@@ -101,29 +102,7 @@ def get_rot90_camera_matrices(pose, fx, fy, cx, cy, h):
     ncx = h - cy
     ncy = cx
 
-    return new_pose_matrix, nfx, nfy, ncx, ncy
-
-
-def get_rot90a_camera_matrices(pose, fx, fy, cx, cy, h):
-    """
-    Get camera matrices for rotating image 90 degrees anti-clockwise
-
-    :param pose: camera pose matrix
-    :param fx
-    :param fy
-    :param cx
-    :param cy
-    :param h: original image height
-    :return:
-    """
-    new_pose_matrix = pose @ utils_3d.Rt_to_pose(utils_3d.rotz_np(-np.pi / 2)[0])
-
-    nfx = fy
-    nfy = fx
-    ncx = h - cy
-    ncy = cx
-
-    return new_pose_matrix, nfx, nfy, ncx, ncy
+    return new_pose_matrix, nfx, nfy, ncx, ncy, h, w
 
 
 if __name__ == '__main__':

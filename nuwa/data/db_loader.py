@@ -14,8 +14,7 @@ from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, 
 from nuwa.utils.dmv_utils import utils_3d
 from nuwa.utils.image_utils import center_crop_and_update_intrinsics, sharpness
 from nuwa.utils.os_utils import do_system
-from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices, \
-    get_rot90a_camera_matrices
+from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices
 from nuwa.utils.video_utils import run_ffmpeg
 
 
@@ -164,8 +163,7 @@ def from_polycam(
 
             if should_be_portrait:
                 image = image.rotate(270, expand=True)
-                pose, fx, fy, cx, cy = get_rot90_camera_matrices(pose, fx, fy, cx, cy, h)
-                h, w = w, h
+                pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
                 pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
 
             image_path = os.path.abspath(os.path.join(new_image_dir, f"{uids[i]}.jpg"))
@@ -179,8 +177,7 @@ def from_polycam(
                     image = Image.open(image_path)
                     image = image.rotate(270, expand=True)
                     image.save(new_image_path)
-                    pose, fx, fy, cx, cy = get_rot90_camera_matrices(pose, fx, fy, cx, cy, h)
-                    h, w = w, h
+                    pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
                     pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
                 else:
                     shutil.copy2(image_path, new_image_path)
@@ -353,12 +350,7 @@ def from_dear(
 
         image = Image.open(frame_path)
         if should_be_portrait:
-            # image = image.rotate(90, expand=True)
-            # image.save(frame_path)
-            # image = image.rotate(270, expand=True)
-            # image.save(frame_path)
-            pose, fx, fy, cx, cy = get_rot90a_camera_matrices(pose, fx, fy, cx, cy, h)
-            h, w = w, h
+            pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
             pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
 
         camera = PinholeCamera(w, h, fx, fy, cx, cy)
