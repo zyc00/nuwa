@@ -266,7 +266,7 @@ class NuwaDB:
         camera_poses[:, :3, 3] -= offset
         self.colmap_reconstruction.world_translate(-offset)
 
-        scale = scale_factor / np.linalg.norm(camera_poses[:, :3, 3], axis=-1).max()  # fix bug...
+        scale = scale_factor / np.linalg.norm(camera_poses[:, :3, 3], axis=-1).max()
         camera_poses[:, :3, 3] *= scale
         self.colmap_reconstruction.world_scale(scale)
 

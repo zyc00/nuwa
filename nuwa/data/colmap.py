@@ -207,8 +207,16 @@ class Reconstruction:
         self._dump_points(output_folder)
         self._dump_images(output_folder)
 
+        if os.path.exists(os.path.join(output_folder, 'cameras.bin')):
+            try:
+                os.remove(os.path.join(output_folder, 'cameras.bin'))
+                os.remove(os.path.join(output_folder, 'images.bin'))
+                os.remove(os.path.join(output_folder, 'points3D.bin'))
+            except FileNotFoundError:
+                pass
+
         colmap_convert_model(output_folder, out_type="BIN")
-        self.export_point_cloud(os.path.join(output_folder, 'points3D.ply'))
+        self.export_point_cloud(os.path.join(output_folder, 'colmap_points.ply'))
 
     def export_point_cloud(self, path, write_text=False):
         if path.endswith('.ply'):
