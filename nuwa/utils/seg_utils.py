@@ -11,7 +11,9 @@ try:
     from rembg import new_session, remove
     from segment_anything import sam_model_registry, SamPredictor
 except ImportError:
-    nuwa.get_logger().error("Please follow read me to install rembg and segment_anything.")
+    nuwa.get_logger().error("Please install rembg and segment_anything for processing objects:"
+                            '`pip install "rembg>=2.0.57" "torch>=2.0.0" "torchvision>=0.16.0" '
+                            'git+https://github.com/facebookresearch/segment-anything.git`')
     raise
 
 from .dmv_utils import plt_utils, utils_3d

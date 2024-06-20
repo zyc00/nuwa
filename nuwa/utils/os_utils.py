@@ -4,7 +4,7 @@ import nuwa
 
 
 def do_system(arg):
-    nuwa.get_logger().debug("System running: {arg}")
+    nuwa.get_logger().debug(f"System running: {arg}")
 
     if nuwa.get_log_level() == nuwa.logging.DEBUG:
         subprocess.check_call(arg)
