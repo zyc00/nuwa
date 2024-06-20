@@ -98,7 +98,8 @@ def main():
     gen_mask = args.object
     undistort = not args.no_undistort
     if gen_mask:
-        assert camera_model == "OPENCV" and undistort
+        assert nuwa.is_seg_available(), "Segmentation is not available, please install dependencies following README."
+        assert camera_model == "OPENCV" and undistort  # fix this
     copy_images_to = None
 
     if args.model == "colmap":
