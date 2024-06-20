@@ -314,7 +314,7 @@ class NuwaDB:
             matcher="exhaustive",
             colmap_binary="colmap",
             loop_detection=True,
-            undistort=True
+            undistort=False
     ):
         """
         Return a new database with the poses fine-tuned using colmap

@@ -190,10 +190,11 @@ def from_polycam(
 
                 image_path = os.path.abspath(new_image_path)
 
-        if dir_prefix == "corrected_":
-            camera = PinholeCamera(w, h, fx, fy, cx, cy)
-        else:
-            camera = OpenCvCamera(w, h, fx, fy, cx, cy)
+        camera = PinholeCamera(w, h, fx, fy, cx, cy)
+        # if dir_prefix == "corrected_":
+        #     camera = PinholeCamera(w, h, fx, fy, cx, cy)
+        # else:
+        #     camera = OpenCvCamera(w, h, fx, fy, cx, cy)
 
         frame = Frame(
             camera=camera,
