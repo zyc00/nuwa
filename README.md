@@ -24,13 +24,16 @@ pip install rembg>=2.0.57 torch>=2.0.0 torchvision>=0.16.0 git+https://github.co
 nuwa -v VIDEO_PATH -o OUT_DIR --fps 30
 
 # To process a folder of images:
-nuwa -i IMAGE_DIR -o OUT_DIR #--finetune-pose (optional)
+nuwa -i IMAGE_DIR -o OUT_DIR  # --object (optional)
 
 # To process a polycam zip / folder:
-nuwa -p polycam.zip -o OUT_DIR --portrait --object #--finetune-pose (optional)
+nuwa -p polycam.zip -o OUT_DIR  # --portrait --object --finetune-pose (optional)
 
 # To process a 3dscannerapp zip / folder:
-nuwa -s polycam.zip -o OUT_DIR --object #--finetune-pose (optional)
+nuwa -s scan.zip -o OUT_DIR  # --object --finetune-pose (optional)
+
+# To process a DEAR zip / folder:
+nuwa -d dear.zip -o OUT_DIR  # --portrait --object --finetune-pose (optional)
 
 # To view all options:
 nuwa -h
@@ -118,8 +121,9 @@ Example:
 3. To use a more advanced sfm pipeline (hloc, hloc++), you need to first install the required dependencies as shown in `setup_pixsfm.sh`.
 4. If you need the original colmap database/sparse estimation (e.g. for 3DGS pipelines), please pass `--colmap-dir` or `colmap_out_dir` explicitly. 
 
-### Fine-tuning pose
-1. If you have a rough estimate of the camera poses, you can pass `--finetune-pose` to refine the poses with instant-ngp. This requires the `instant-ngp` executable in your PATH.  
+### App-sourced data
+1. `--portrait` flag is mandatory for portrait-oriented scenes captured in polycam or DEAR.
+2. If you have a rough estimate of the camera poses, you can pass `--finetune-pose` to refine the poses with instant-ngp. This requires the `instant-ngp` executable in your `PATH`.  
 
 ### Known issues 
 1. If you encountered any issue with `flann`, try running with `--no-loop-detection` or pass `colmap_loop_detection=False`. There is likely an issue with your system kernel.
@@ -132,3 +136,4 @@ Example:
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
 - [ ] More camera normalization options
+- [ ] Org path is not well tracked in finetune_pose*

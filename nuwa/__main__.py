@@ -81,7 +81,7 @@ def main():
 
     if args.verbose:
         nuwa.get_logger().warning("--verbose flag is deprecated, use --log-level/-l DEBUG/INFO/WARNING/ERROR instead")
-        nuwa.set_log_level("DEBUG")
+        nuwa.set_log_level(nuwa.logging.DEBUG)
     else:
         nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
 
@@ -248,7 +248,8 @@ def colmap():
 
         parser.add_argument("--colmap-binary", type=str, default="colmap",
                             help="Path to the colmap binary")
-
+        parser.add_argument("--matcher", type=str, default="exhaustive",
+                            help="Feature matcher, omitted for video inputs")
         parser.add_argument("--no-loop-detection", action="store_true",
                             help="Disable loop detection in colmap")
 
@@ -273,46 +274,13 @@ def colmap():
     out_dir = args.out_dir
     colmap_binary = args.colmap_binary
     loop_detection = not args.no_loop_detection
+    matcher = args.matcher
 
-    image_dir = os.path.join(nuwa_dir, "images")
     os.makedirs(out_dir, exist_ok=False)
 
     db = from_nuwadb(os.path.join(nuwa_dir, "nuwa_db.json"))
+    db.generate_points_colmap(matcher=matcher, colmap_binary=colmap_binary, loop_detection=loop_detection)
 
-    heuristics = ','.join(map(str, db.frames[0].camera.params))
-
-    colmap_in_dir = tempfile.mkdtemp()
-    db.dump_reconstruction(colmap_in_dir)
-    colmap_out_dir = tempfile.mkdtemp()
-
-    run_colmap(
-        image_dir=image_dir,
-        out_dir=colmap_out_dir,
-        matcher="exhaustive",
-        camera_model="PINHOLE",
-        heuristics=heuristics,
-        colmap_binary=colmap_binary,
-        single_camera=False,
-        loop_detection=loop_detection,
-        from_db=None,
-        db_only=True
-    )
-    db.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
-    shutil.rmtree(colmap_in_dir)
-    colmap_in_dir = tempfile.mkdtemp()
-    db.dump_reconstruction(colmap_in_dir)
-
-    nuwa.get_logger().info("colmap - Triangulating points...")
-    do_system((f"{colmap_binary}", "point_triangulator",
-               f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
-               f"--image_path={image_dir}",
-               f"--input_path={colmap_in_dir}",
-               f"--output_path={colmap_out_dir}",
-               f"--Mapper.ba_refine_principal_point=1",
-               f"--Mapper.ba_global_function_tolerance=0.000001",
-               f"--Mapper.fix_existing_images=0"))
-
-    db = from_colmap(image_dir, colmap_out_dir)
     os.makedirs(os.path.join(out_dir, "images"), exist_ok=True)
     os.makedirs(os.path.join(out_dir, "masks"), exist_ok=True)
     db.dump(

@@ -32,6 +32,9 @@ class Reconstruction:
         self.images = self._load_images(folder_path)
         self.image_dir = image_dir
 
+        nuwa.get_logger().info(f"{len(self.cameras)} cameras, {len(self.points)} points, {len(self.images)} images "
+                               f"loaded to colmap reconstruction.")
+
     @classmethod
     def from_colmap(cls, folder_path: str, image_dir: str | None = None):
         return cls(folder_path, image_dir)
@@ -89,6 +92,8 @@ class Reconstruction:
                 "tvec": Rt[:3, 3],
                 "qvec": -rotmat2qvec(Rt[:3, :3]),
             }
+
+        image_dir = os.path.abspath(image_dir)
 
         return cls.from_data({i: {"model": c.type, "width": c.w, "height": c.h, "params": c.params}
                               for i, c in enumerate(cameras)}, points, images, image_dir)

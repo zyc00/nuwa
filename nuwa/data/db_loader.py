@@ -21,6 +21,7 @@ from nuwa.utils.video_utils import run_ffmpeg
 
 def from_reconstruction(
         reconstruction: Reconstruction,
+        fix_up=False
 ):
     frames = []
     for image_id, image in reconstruction.images.items():
@@ -40,7 +41,10 @@ def from_reconstruction(
         r = qvec2rotmat(-r)
         t = t.reshape([3, 1])
         w2c = np.concatenate([np.concatenate([r, t], 1), np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])], 0)
-        c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ np.linalg.inv(w2c)  # world z up
+        c2w = np.linalg.inv(w2c)
+
+        if fix_up:
+            c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ c2w  # world z up
 
         frame = Frame(
             camera=camera,
@@ -60,7 +64,8 @@ def from_reconstruction(
 
 def from_colmap(
         img_dir,
-        colmap_dir
+        colmap_dir,
+        fix_up=False
 ):
     camera_path = os.path.join(colmap_dir, "cameras.txt")
 
@@ -71,7 +76,7 @@ def from_colmap(
         else:
             raise ValueError(f"Camera file {camera_path} does not exist")
 
-    return from_reconstruction(Reconstruction(colmap_dir, image_dir=img_dir))
+    return from_reconstruction(Reconstruction(colmap_dir, image_dir=img_dir), fix_up=fix_up)
 
 
 def from_polycam(
@@ -110,9 +115,9 @@ def from_polycam(
     else:
         assert os.path.exists(os.path.join(seq_dir, "cameras"))
         nuwa.get_logger().warning("Using uncorrected cameras, this is not recommended as "
-              "poses will be inaccurate and there is not guarantee of world z up")
+                                  "poses will be inaccurate and there is not guarantee of world z up")
         if discard_border_rate > 0:
-            nuwa.get_logger().warning("Using f{discard_border_rate=} for uncorrected cameras")
+            nuwa.get_logger().warning(f"Using {discard_border_rate=} for uncorrected cameras")
         dir_prefix = ""
 
     if new_image_dir is not None:
@@ -185,7 +190,10 @@ def from_polycam(
 
                 image_path = os.path.abspath(new_image_path)
 
-        camera = PinholeCamera(w, h, fx, fy, cx, cy)
+        if dir_prefix == "corrected_":
+            camera = PinholeCamera(w, h, fx, fy, cx, cy)
+        else:
+            camera = OpenCvCamera(w, h, fx, fy, cx, cy)
 
         frame = Frame(
             camera=camera,
@@ -337,7 +345,7 @@ def from_dear(
                 'ffmpeg', '-y', '-ss', str_timestamp, '-i', sequence_file, '-vframes', '1', '-f', 'image2', frame_path
             ])
         except Exception as e:
-            nuwa.get_logger().error("fail to process {sequence_file}: {e}")
+            nuwa.get_logger().error(f"fail to process {sequence_file}: {e}")
             shutil.rmtree(out_frame_dir)
             raise
 
@@ -374,11 +382,12 @@ def from_dear(
 
 def from_nuwadb(path):
     db = json.load(open(path))
-    frames = sorted([Frame.from_dict(f) for f in db["frames"]], key=lambda x: x.image_path)
+    frames = sorted([Frame.from_dict(f, root=os.path.dirname(path)) for f in db["frames"]], key=lambda x: x.image_path)
     return NuwaDB(
         source=db["source"],
         frames=frames,
-        colmap_reconstruction=Reconstruction.from_frames(frames)
+        colmap_reconstruction=Reconstruction.from_frames(frames),
+        scale_denorm=db.get("scale_denorm", None)
     )
 
 
@@ -513,7 +522,7 @@ def from_video(
     """
     if not single_camera:
         nuwa.get_logger().warning("Using multiple cameras for a video, "
-              "please make sure this is what you want")
+                                  "please make sure this is what you want")
 
     os.makedirs(out_img_dir, exist_ok=True)
     run_ffmpeg(video_path, out_img_dir, fps)

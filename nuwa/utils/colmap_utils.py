@@ -135,7 +135,7 @@ def run_hloc(
         )
         import pycolmap
     except ImportError:
-        nuwa.get_logger().error(
+        logger.error(
             f"hloc or pycolmap is not installed, run:\n"
             f"pip install pycolmap==0.6.1 "
             "git+https://github.com/cvg/Hierarchical-Localization.git@e3e953f4db00c3b9b14951482349d5ddd9424452"

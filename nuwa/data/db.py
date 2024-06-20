@@ -13,8 +13,7 @@ from PIL import Image
 import nuwa
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
-from nuwa.utils.colmap_utils import run_colmap
-from nuwa.utils.dmv_utils import utils_3d
+from nuwa.utils.colmap_utils import run_colmap, colmap_undistort_images
 from nuwa.utils.os_utils import do_system
 from nuwa.utils.pose_utils import convert_camera_pose
 
@@ -26,11 +25,11 @@ class NuwaDB:
 
     scale_denorm: float | None     # scale_denorm for normalizing the scene into, typically into (-1, 1)
 
-    def __init__(self, source="", frames=None, colmap_reconstruction=None):
+    def __init__(self, source="", frames=None, colmap_reconstruction=None, scale_denorm=None):
         self.source = source
         self.frames = [] if frames is None else frames
         self.colmap_reconstruction = deepcopy(colmap_reconstruction)
-        self.scale_denorm = None
+        self.scale_denorm = scale_denorm
 
     def __repr__(self):
         return {
@@ -57,6 +56,9 @@ class NuwaDB:
         if self.source == "colmap":
             return up
         elif self.source == "arkit":
+            return np.array([0., 0., 1.])
+        elif self.source == "polycam":
+            nuwa.get_logger().warning("deprecated source name 'polycam' detected, assuming 'arkit'")
             return np.array([0., 0., 1.])
         else:
             raise ValueError(f"Unknown source {self.source}")
@@ -147,7 +149,7 @@ class NuwaDB:
         from nuwa.utils.dmv_utils import raft_api
 
         # TODO: fix this
-        if self.colmap_reconstruction is not None:
+        if self.colmap_reconstruction is not None and self.source == "colmap":
             nuwa.get_logger().warning(f"in the current version, colmap reconstruction will break after masking")
 
         os.makedirs(mask_save_dir, exist_ok=True)
@@ -311,7 +313,8 @@ class NuwaDB:
             self,
             matcher="exhaustive",
             colmap_binary="colmap",
-            loop_detection=True
+            loop_detection=True,
+            undistort=True
     ):
         """
         Return a new database with the poses fine-tuned using colmap
@@ -319,6 +322,7 @@ class NuwaDB:
         :param matcher:
         :param colmap_binary:
         :param loop_detection:
+        :param undistort:
         :return:
         """
 
@@ -385,16 +389,84 @@ class NuwaDB:
         )
 
         from nuwa import from_colmap
-        new_db = from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"))
-        for f in new_db.frames:
-            f.pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ f.pose
+        new_db = from_colmap(self.colmap_reconstruction.image_dir, os.path.join(colmap_out_dir, "sparse"), fix_up=False)
 
         self.frames = new_db.frames
         self.colmap_reconstruction = new_db.colmap_reconstruction
         self.scale_denorm = new_db.scale_denorm
 
+        nuwa.get_logger().info(f"colmap fine-tuning done, "
+                               f"reconstruction contains {len(self.colmap_reconstruction.points)} points")
+        nuwa.get_logger().info("up after fine-tuning:")
+        self.get_up()
+
+        if undistort and self.frames[0].camera.type == "OPENCV":
+            undistort_dir = tempfile.mkdtemp()
+            undistort_image_dir = os.path.join(self.colmap_reconstruction.image_dir, "undistort")
+
+            colmap_undistort_images(
+                self.colmap_reconstruction.image_dir,
+                os.path.join(colmap_out_dir, "sparse"),
+                undistort_dir,
+                colmap_binary=colmap_binary
+            )
+
+            if os.path.exists(undistort_image_dir):
+                shutil.rmtree(undistort_image_dir)
+
+            shutil.move(os.path.join(undistort_dir, "images"), undistort_image_dir)
+
+            new_db = from_colmap(undistort_image_dir, os.path.join(undistort_dir, "sparse/0"), fix_up=False)
+            self.frames = new_db.frames
+            self.colmap_reconstruction = new_db.colmap_reconstruction
+            self.scale_denorm = new_db.scale_denorm
+
+            nuwa.get_logger().info("up after undistort:")
+            self.get_up()
+
+            shutil.rmtree(undistort_dir)
+
         shutil.rmtree(colmap_in_dir)
         shutil.rmtree(colmap_out_dir)
 
-        nuwa.get_logger().info(f"colmap fine-tuning done, "
-                               f"reconstruction contains {len(self.colmap_reconstruction.points)} points")
+    def generate_points_colmap(
+            self,
+            matcher="exhaustive",
+            colmap_binary="colmap",
+            loop_detection=True
+    ):
+        image_dir = os.path.dirname(self.frames[0].image_path)
+        heuristics = ','.join(map(str, self.frames[0].camera.params))
+
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+        colmap_out_dir = tempfile.mkdtemp()
+
+        run_colmap(
+            image_dir=image_dir,
+            out_dir=colmap_out_dir,
+            matcher=matcher,
+            camera_model=self.frames[0].camera.type,
+            heuristics=heuristics,
+            colmap_binary=colmap_binary,
+            single_camera=False,
+            loop_detection=loop_detection,
+            from_db=None,
+            db_only=True
+        )
+        self.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
+        shutil.rmtree(colmap_in_dir)
+        colmap_in_dir = tempfile.mkdtemp()
+        self.dump_reconstruction(colmap_in_dir)
+
+        nuwa.get_logger().info("colmap - Triangulating points...")
+        do_system((f"{colmap_binary}", "point_triangulator",
+                   f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
+                   f"--image_path={image_dir}",
+                   f"--input_path={colmap_in_dir}",
+                   f"--output_path={colmap_out_dir}",
+                   f"--Mapper.ba_refine_principal_point=1",
+                   f"--Mapper.ba_global_function_tolerance=0.000001",
+                   f"--Mapper.fix_existing_images=0"))
+
+        self.colmap_reconstruction = Reconstruction.from_colmap(colmap_out_dir)

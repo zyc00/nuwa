@@ -16,7 +16,7 @@ def is_seg_available():
     try:
         import torch
         import torchvision
-        import utils.seg_utils
+        import nuwa.utils.seg_utils
         return True
     except ImportError:
         return False
@@ -38,7 +38,6 @@ def set_log_level(level):
 
 def get_log_level():
     return get_logger().getEffectiveLevel()
-
 
 
 class _NuwaFormatter(logging.Formatter):

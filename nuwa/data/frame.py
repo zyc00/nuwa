@@ -1,3 +1,5 @@
+import os.path
+
 import numpy as np
 
 from nuwa.data.camera import _Camera, OpenCvCamera, PinholeCamera
@@ -59,7 +61,7 @@ class Frame:
         return ret
 
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_dict(cls, data: dict, root=""):
         if data["camera_param_model"] == "OPENCV":
             camera = OpenCvCamera(
                 data["w"], data["h"],
@@ -78,11 +80,22 @@ class Frame:
             raise ValueError(f"Unknown camera model: {data['camera_model']}")
 
         pose = np.array(data["c2w"])
-        image_path = data["file_path"]
+        image_path = os.path.join(root, data["file_path"]) if root else data["file_path"]
+        image_path = os.path.abspath(image_path)
         seq_id = data["seq_id"]
         sharpness_score = data["sharpness"]
-        mask_path = data["mask_path"]
-        org_path = data["org_path"]
+
+        if data["mask_path"]:
+            mask_path = os.path.join(root, data["mask_path"]) if root else data["mask_path"]
+            mask_path = os.path.abspath(mask_path)
+        else:
+            mask_path = ""
+
+        if data["org_path"]:
+            org_path = os.path.join(root, data["org_path"]) if root else data["org_path"]
+            org_path = os.path.abspath(org_path)
+        else:
+            org_path = ""
 
         return cls(
             camera,
