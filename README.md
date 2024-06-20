@@ -8,12 +8,13 @@ nuwa (女媧／女娲, Nǚwā) is a Python library for pre-processing images and
 ⚙️ Installation
 
 ```bash
-# make sure you have colmap in your PATH:
+# make sure you have colmap in your PATH, otherwise run:
 # sudo apt install -y colmap 
+# or follow official installation guide for CUDA support (see FAQ below)
 pip install git+https://github.com/jetd1/nuwa.git
 
-# (optional) if you want to use segmentation
-pip install git+https://github.com/facebookresearch/segment-anything.git
+# (optional) if you want to use segmentation for object oriented scenes (--object)
+pip install rembg>=2.0.57 torch>=2.0.0 torchvision>=0.16.0 git+https://github.com/facebookresearch/segment-anything.git
 ```
 
 🧑‍💻 CLI

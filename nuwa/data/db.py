@@ -10,6 +10,7 @@ import numpy as np
 import tqdm
 from PIL import Image
 
+import nuwa
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap
@@ -48,9 +49,10 @@ class NuwaDB:
 
         # check if close to (0, 0, 1)
         if up[2] < 0.95:
-            print(f"WARNING: avg up {tuple(up)} is not close to +z, please check if the extrinsics are correct.")
+            nuwa.get_logger().warning(f"avg up {tuple(up)} is not close to +z, "
+                                      f"please check if the extrinsics are correct.")
         else:
-            print(f"INFO: avg up {tuple(up)}")
+            nuwa.get_logger().info(f"avg up {tuple(up)}")
 
         if self.source == "colmap":
             return up
@@ -146,7 +148,7 @@ class NuwaDB:
 
         # TODO: fix this
         if self.colmap_reconstruction is not None:
-            print("WARNING: in the current version, colmap reconstruction will break after masking")
+            nuwa.get_logger().warning(f"in the current version, colmap reconstruction will break after masking")
 
         os.makedirs(mask_save_dir, exist_ok=True)
         os.makedirs(masked_image_save_dir, exist_ok=True)
@@ -276,13 +278,13 @@ class NuwaDB:
         else:
             self.scale_denorm *= scale
 
-    def finetune_pose(self, ingp_binary="instant-ngp", verbose=True):
+    def finetune_pose(self, ingp_binary="instant-ngp"):
         tmp_dump = tempfile.mkdtemp()
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        print(f"INFO: please use GUI to perform extrinsic optimization and dump pose now (select no quat)`")
-        do_system((ingp_binary, tmp_json, "--no-train"), verbose=verbose)
+        nuwa.get_logger().info(f"please use GUI to perform extrinsic optimization and dump pose now (select no quat)`")
+        do_system((ingp_binary, tmp_json, "--no-train"))
 
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
         refined_json = json.load(open(refined_json, "r"))
@@ -298,8 +300,7 @@ class NuwaDB:
             err = f.pose @ np.linalg.inv(pose)
             err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
             err_t = np.linalg.norm(err[:3, 3])
-            if verbose:
-                print(f"Fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
+            nuwa.get_logger().debug(f"Fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
 
             f.pose = pose
 
@@ -310,8 +311,7 @@ class NuwaDB:
             self,
             matcher="exhaustive",
             colmap_binary="colmap",
-            loop_detection=True,
-            verbose=True
+            loop_detection=True
     ):
         """
         Return a new database with the poses fine-tuned using colmap
@@ -319,17 +319,17 @@ class NuwaDB:
         :param matcher:
         :param colmap_binary:
         :param loop_detection:
-        :param verbose:
         :return:
         """
-
-        print("WARNING: fine-tuning with colmap, this is known to be useless")
 
         if self.colmap_reconstruction is None:
             raise ValueError("No colmap reconstruction found")
 
         if self.source == "colmap":
-            print("WARNING: fine-tuning with colmap on a colmap sourced database")
+            nuwa.get_logger().warning("fine-tuning with colmap on a colmap sourced database")
+
+        nuwa.get_logger().info("up before fine-tuning:")
+        self.get_up()
 
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
@@ -347,8 +347,7 @@ class NuwaDB:
             single_camera=single_camera,
             loop_detection=loop_detection,
             from_db=None,
-            db_only=True,
-            verbose=verbose
+            db_only=True
         )
 
         shutil.rmtree(colmap_in_dir)
@@ -357,7 +356,7 @@ class NuwaDB:
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
 
-        print("INFO: colmap - point triangulation")
+        nuwa.get_logger().info("colmap - point triangulation")
         do_system((f"{colmap_binary}", "point_triangulator",
                    f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                    f"--image_path={self.colmap_reconstruction.image_dir}",
@@ -367,7 +366,7 @@ class NuwaDB:
                    f"--Mapper.ba_refine_principal_point={int(single_camera)}",
                    f"--Mapper.ba_refine_extra_params={int(single_camera)}",
                    f"--Mapper.ba_global_function_tolerance=0.000001",
-                   f"--Mapper.fix_existing_images=0"), verbose)
+                   f"--Mapper.fix_existing_images=0"))
 
         run_colmap(
             image_dir=self.colmap_reconstruction.image_dir,
@@ -382,8 +381,7 @@ class NuwaDB:
             from_db=os.path.join(colmap_out_dir, "database.db"),
             db_only=False,
             fix_image_pose=False,
-            fix_intrinsics=not single_camera,
-            verbose=verbose
+            fix_intrinsics=not single_camera
         )
 
         from nuwa import from_colmap
@@ -394,3 +392,9 @@ class NuwaDB:
         self.frames = new_db.frames
         self.colmap_reconstruction = new_db.colmap_reconstruction
         self.scale_denorm = new_db.scale_denorm
+
+        shutil.rmtree(colmap_in_dir)
+        shutil.rmtree(colmap_out_dir)
+
+        nuwa.get_logger().info(f"colmap fine-tuning done, "
+                               f"reconstruction contains {len(self.colmap_reconstruction.points)} points")

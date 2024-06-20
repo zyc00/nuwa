@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nuwa',
-    version='0.0.63',
+    version='0.0.70',
     description='',
     author='Xiaoshuai Jet Zhang',
     author_email='jetgabr@gmail.com',
@@ -11,14 +11,12 @@ setup(
     install_requires=[
         'opencv_python>=4.9.0.80',
         'pillow>=10.3.0',
-        'rembg>=2.0.57',
         'matplotlib>=3.8.0',
         'numpy>=1.22',
         'tqdm>=4.0.0',
-        'torch>=2.0.0',
-        'torchvision>=0.16.0',
         'easydict>=1.0',
         'plyfile>=1.0.3'
+        'rich>=11.0.0'
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

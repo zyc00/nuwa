@@ -6,6 +6,7 @@ import tqdm
 import numpy as np
 from PIL import Image
 
+import nuwa
 from nuwa.data.colmap import Reconstruction
 from nuwa.data.db import NuwaDB
 from nuwa.data.camera import OpenCvCamera, PinholeCamera
@@ -99,8 +100,8 @@ def from_polycam(
         dir_prefix = "corrected_"
 
         if discard_border_rate <= 0:
-            print("WARNING: corrected image but discard_border_rate is 0, "
-                  "this could lead to black pixels (try 0.01?)")
+            nuwa.get_logger().warning("Corrected image but discard_border_rate is 0, "
+                                      "this could lead to black pixels (try 0.01?)")
 
         if discard_border_rate > 0:
             assert discard_border_rate <= 1, "discard_border_rate should be in [0, 1]"
@@ -108,10 +109,10 @@ def from_polycam(
 
     else:
         assert os.path.exists(os.path.join(seq_dir, "cameras"))
-        print("WARNING: using uncorrected cameras, this is not recommended as "
+        nuwa.get_logger().warning("Using uncorrected cameras, this is not recommended as "
               "poses will be inaccurate and there is not guarantee of world z up")
         if discard_border_rate > 0:
-            print(f"WARNING: using f{discard_border_rate=} for uncorrected cameras")
+            nuwa.get_logger().warning("Using f{discard_border_rate=} for uncorrected cameras")
         dir_prefix = ""
 
     if new_image_dir is not None:
@@ -148,7 +149,7 @@ def from_polycam(
                     "new_image_dir is required for portrait"
 
             else:
-                print("WARNING: image is already portrait, ignoring the `portrait` flag...")
+                nuwa.get_logger().warning("Image is already portrait, ignoring the `portrait` flag...")
                 should_be_portrait = False
 
         if discard_border_rate > 0:
@@ -278,7 +279,6 @@ def from_dear(
         out_frame_dir,
         should_be_portrait=False,
         sample_stride=1,
-        verbose=False
 ):
     """
         (beta) load from dear zip or folder
@@ -286,10 +286,8 @@ def from_dear(
         :param out_frame_dir: output frame directory
         :param should_be_portrait: if the captured data should be portrait or not
         :param sample_stride: sample stride
-        :param verbose: verbose
     """
-    print("WARNING: DEAR importer seems to be buggy, please use with caution.")
-    print("WARNING: This is a beta feature.")
+    nuwa.get_logger().warning("DEAR importer is a beta feature, please proceed with caution.")
 
     if file_path.endswith(".zip"):
         import zipfile
@@ -309,19 +307,18 @@ def from_dear(
 
     sequence_file = os.path.abspath(os.path.join(file_path, mp4_files[0]))
     if os.path.exists(out_frame_dir):
-        print("WARNING: output frame directory exists, overwriting...")
+        nuwa.get_logger().warning("Output frame directory exists, overwriting...")
 
     os.makedirs(out_frame_dir, exist_ok=True)
 
     metadata = json.load(open(os.path.join(file_path, sequence_file.replace(".mp4", "_pose.json"))))
-    print(f"INFO: Found {len(metadata['frames'])} frames in the sequence")
+    nuwa.get_logger().info(f"Found {len(metadata['frames'])} frames in the sequence")
 
     w, h = metadata['width'], metadata['height']
     data = metadata['frames'][::sample_stride]
 
     frames = []
-    for i, f in enumerate(tqdm.tqdm(data)):
-
+    for i, f in enumerate(tqdm.tqdm(data, desc="Extracting DEAR frames", unit="f")):
         transform = np.array(f['transform']).T
         time = f['time']
         intrinsic = np.array(f['intrinsic']).T
@@ -338,9 +335,9 @@ def from_dear(
         try:
             do_system([
                 'ffmpeg', '-y', '-ss', str_timestamp, '-i', sequence_file, '-vframes', '1', '-f', 'image2', frame_path
-            ], verbose=verbose)
+            ])
         except Exception as e:
-            print(f"ERROR: fail to process {sequence_file}: {e}")
+            nuwa.get_logger().error("fail to process {sequence_file}: {e}")
             shutil.rmtree(out_frame_dir)
             raise
 
@@ -398,8 +395,7 @@ def from_image_folder(
         colmap_binary="colmap",
         colmap_loop_detection=True,
         hloc_max_keypoints=20000,
-        hloc_use_pixsfm=False,
-        verbose=False
+        hloc_use_pixsfm=False
 ):
     """
     :param img_dir: path to image directory
@@ -415,7 +411,6 @@ def from_image_folder(
     :param colmap_loop_detection: run loop detection in colmap
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
-    :param verbose: verbose
     """
 
     assert method in ["colmap", "hloc"]
@@ -441,8 +436,7 @@ def from_image_folder(
             heuristics=camera_heuristics,
             colmap_binary=colmap_binary,
             single_camera=single_camera,
-            loop_detection=colmap_loop_detection,
-            verbose=verbose
+            loop_detection=colmap_loop_detection
         )
 
     else:
@@ -455,8 +449,7 @@ def from_image_folder(
             colmap_binary=colmap_binary,
             single_camera=single_camera,
             max_keypoints=hloc_max_keypoints,
-            use_pixsfm=hloc_use_pixsfm,
-            verbose=verbose
+            use_pixsfm=hloc_use_pixsfm
         )
 
     old_sparse_dir = os.path.join(colmap_out_dir, "sparse")
@@ -468,8 +461,7 @@ def from_image_folder(
             img_dir,
             os.path.join(old_sparse_dir, "0"),
             undistort_dir,
-            colmap_binary=colmap_binary,
-            verbose=verbose
+            colmap_binary=colmap_binary
         )
         if os.path.exists(undistort_image_dir):
             shutil.rmtree(undistort_image_dir)
@@ -479,12 +471,12 @@ def from_image_folder(
 
     n_models = len(os.listdir(old_sparse_dir))
     if n_models == 0:
-        print("FATAL: no models generated")
+        nuwa.get_logger().error("no models generated")
         return None
 
     if n_models > 1:
-        print("WARNING: multiple models generated")
-        print("WARNING: only 0 is processed")
+        nuwa.get_logger().warning("multiple models generated")
+        nuwa.get_logger().warning("only model 0 is processed")
 
     return from_colmap(img_dir, os.path.join(new_sparse_dir, "0"))
 
@@ -502,8 +494,7 @@ def from_video(
         colmap_binary="colmap",
         colmap_loop_detection=True,
         hloc_max_keypoints=20000,
-        hloc_use_pixsfm=False,
-        verbose=False
+        hloc_use_pixsfm=False
 ):
     """
     :param video_path: path to video
@@ -519,14 +510,13 @@ def from_video(
     :param colmap_loop_detection: run loop detection in colmap
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
-    :param verbose: verbose
     """
     if not single_camera:
-        print("WARNING: Using multiple cameras for a video, "
+        nuwa.get_logger().warning("Using multiple cameras for a video, "
               "please make sure this is what you want")
 
     os.makedirs(out_img_dir, exist_ok=True)
-    run_ffmpeg(video_path, out_img_dir, fps, verbose=verbose)
+    run_ffmpeg(video_path, out_img_dir, fps)
 
     return from_image_folder(
         out_img_dir,
@@ -541,5 +531,4 @@ def from_video(
         colmap_loop_detection=colmap_loop_detection,
         hloc_max_keypoints=hloc_max_keypoints,
         hloc_use_pixsfm=hloc_use_pixsfm,
-        verbose=verbose
     )

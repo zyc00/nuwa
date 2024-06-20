@@ -5,6 +5,7 @@ import numpy as np
 import plyfile
 from copy import deepcopy as copy
 
+import nuwa
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import colmap_convert_model
 from nuwa.utils.pose_utils import rotmat2qvec
@@ -49,8 +50,8 @@ class Reconstruction:
         obj.images = images
         obj.image_dir = image_dir
 
-        print(f"INFO: {len(cameras)} cameras, {len(points)} points, {len(images)} images "
-              f"loaded to colmap reconstruction.")
+        nuwa.get_logger().info(f"{len(cameras)} cameras, {len(points)} points, {len(images)} images "
+                               f"loaded to colmap reconstruction.")
 
         return obj
 
@@ -152,7 +153,7 @@ class Reconstruction:
                     'track': track
                 }
         if len(points) == 0:
-            print("WARNING: No points found in the file")
+            nuwa.get_logger().warning(f"No points found in {folder_path}")
 
         return points
 
@@ -282,15 +283,14 @@ class Reconstruction:
                     file.write(f'{xy[0]} {xy[1]} {point3D_id} ')
                 file.write('\n')
 
-    def reorder_from_db(self, colmap_database_path, verbose=False):
+    def reorder_from_db(self, colmap_database_path):
         from nuwa.utils.colmap_utils import get_name2id_from_colmap_db
 
-        name2id = get_name2id_from_colmap_db(colmap_database_path, verbose)
+        name2id = get_name2id_from_colmap_db(colmap_database_path)
         new_images = {}
         for image in self.images.values():
             new_images[name2id[image['name']]] = copy(image)
 
-        if verbose:
-            print(new_images)
+        nuwa.get_logger().debug(f"Image order: {new_images}")
 
         self.images = new_images

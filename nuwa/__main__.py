@@ -2,6 +2,7 @@ import shutil
 import sys
 import tempfile
 
+import nuwa
 from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap, from_dear
 from nuwa.utils.colmap_utils import run_colmap
 from nuwa.utils.os_utils import do_system
@@ -67,7 +68,10 @@ def main():
                             help="Do not undistort images")
 
         parser.add_argument("--verbose", action="store_true",
-                            help="Verbose mode")
+                            help="Verbose mode (deprecated)")
+        parser.add_argument("--log-level", "-l", type=str, default="INFO",
+                            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                            help="Log level (DEBUG/INFO/WARNING/ERROR)")
 
         return parser.parse_args()
 
@@ -75,12 +79,17 @@ def main():
     import sys
     args = get_args()
 
+    if args.verbose:
+        nuwa.get_logger().warning("--verbose flag is deprecated, use --log-level/-l DEBUG/INFO/WARNING/ERROR instead")
+        nuwa.set_log_level("DEBUG")
+    else:
+        nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
+
     out_dir = args.out_dir
     if os.path.exists(out_dir):
-        print("WARNING: Output directory exists, overwriting...")
+        nuwa.get_logger().warning("Output directory exists, overwriting...")
     os.makedirs(out_dir, exist_ok=True)
 
-    verbose = args.verbose
     camera_model = args.camera_model
     heuristics = args.camera_heuristics
     colmap_binary = args.colmap_binary
@@ -128,16 +137,14 @@ def main():
                 args.dear_path,
                 image_out_dir,
                 args.portrait,
-                args.dear_sample_stride,
-                verbose
+                args.dear_sample_stride
             )
 
         if args.finetune_pose_colmap:
             db.finetune_pose_colmap(
                 matcher="exhaustive",
                 colmap_binary=colmap_binary,
-                loop_detection=True,
-                verbose=verbose
+                loop_detection=True
             )
 
     elif args.video_path:
@@ -157,8 +164,7 @@ def main():
             colmap_out_dir=colmap_out_dir,
             colmap_binary=colmap_binary,
             hloc_max_keypoints=hloc_max_keypoints,
-            hloc_use_pixsfm=hloc_use_pixsfm,
-            verbose=verbose
+            hloc_use_pixsfm=hloc_use_pixsfm
         )
 
         copy_images_to = os.path.join(out_dir, "images")
@@ -169,8 +175,8 @@ def main():
         image_dir = args.image_dir
 
         if matcher == "exhaustive":
-            print("WARNING: Exhaustive matcher is used, this may take a long time. "
-                  "Pass --matcher explicitly if this is unwanted.")
+            nuwa.get_logger().warning("Exhaustive matcher is used, this may take a long time. "
+                                      "Pass --matcher explicitly if this is unwanted.")
 
         db = from_image_folder(
             image_dir,
@@ -184,14 +190,13 @@ def main():
             colmap_binary=colmap_binary,
             colmap_loop_detection=colmap_loop_detection,
             hloc_max_keypoints=hloc_max_keypoints,
-            hloc_use_pixsfm=hloc_use_pixsfm,
-            verbose=verbose
+            hloc_use_pixsfm=hloc_use_pixsfm
         )
 
     if gen_mask:
         if args.finetune_pose:
             db.normalize_cameras(positive_z=True, scale_factor=0.6)
-            db.finetune_pose(args.ingp_binary, verbose=verbose)
+            db.finetune_pose(args.ingp_binary)
 
         try:
             _ = db.calculate_object_mask(
@@ -204,21 +209,21 @@ def main():
             copy_images_to = None
 
             if args.finetune_pose:
-                db.finetune_pose(args.ingp_binary, verbose=verbose)
+                db.finetune_pose(args.ingp_binary)
 
         except ValueError as e:
-            print(f"ERROR: Mask generation failed: {e}")
-            print("ERROR: Continuing without mask generation")
+            nuwa.get_logger().warning(f"Mask generation failed: {e}")
+            nuwa.get_logger().warning("Continuing without mask generation")
             db.normalize_cameras(positive_z=True, scale_factor=0.8)
 
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
         if args.finetune_pose:
-            db.finetune_pose(args.ingp_binary, verbose=verbose)
+            db.finetune_pose(args.ingp_binary)
 
     elif args.finetune_pose:
-        print("WARNING: Pose fine-tuning with ingp requires object scene or normalization.")
-        print("WARNING: Skipping pose fine-tuning...")
+        nuwa.get_logger().warning("Pose fine-tuning with ingp requires object scene or normalization.")
+        nuwa.get_logger().warning("Skipping pose fine-tuning...")
 
     db.dump(
         os.path.join(out_dir, "nuwa_db.json"),
@@ -247,15 +252,24 @@ def colmap():
                             help="Disable loop detection in colmap")
 
         parser.add_argument("--verbose", action="store_true",
-                            help="Verbose mode")
+                            help="Verbose mode (deprecated)")
+        parser.add_argument("--log-level", "-l", type=str, default="INFO",
+                            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                            help="Log level (DEBUG/INFO/WARNING/ERROR)")
 
         return parser.parse_args()
 
     import os
     args = get_args()
+
+    if args.verbose:
+        nuwa.get_logger().warning("--verbose flag is deprecated, use --log-level/-l DEBUG/INFO/WARNING/ERROR instead")
+        nuwa.set_log_level(nuwa.logging.DEBUG)
+    else:
+        nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
+
     nuwa_dir = args.input_dir
     out_dir = args.out_dir
-    verbose = args.verbose
     colmap_binary = args.colmap_binary
     loop_detection = not args.no_loop_detection
 
@@ -280,15 +294,14 @@ def colmap():
         single_camera=False,
         loop_detection=loop_detection,
         from_db=None,
-        db_only=True,
-        verbose=verbose
+        db_only=True
     )
-    db.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"), verbose=verbose)
+    db.colmap_reconstruction.reorder_from_db(os.path.join(colmap_out_dir, "database.db"))
     shutil.rmtree(colmap_in_dir)
     colmap_in_dir = tempfile.mkdtemp()
     db.dump_reconstruction(colmap_in_dir)
 
-    print("INFO: colmap - Triangulating points...")
+    nuwa.get_logger().info("colmap - Triangulating points...")
     do_system((f"{colmap_binary}", "point_triangulator",
                f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                f"--image_path={image_dir}",
@@ -296,7 +309,7 @@ def colmap():
                f"--output_path={colmap_out_dir}",
                f"--Mapper.ba_refine_principal_point=1",
                f"--Mapper.ba_global_function_tolerance=0.000001",
-               f"--Mapper.fix_existing_images=0"), verbose)
+               f"--Mapper.fix_existing_images=0"))
 
     db = from_colmap(image_dir, colmap_out_dir)
     os.makedirs(os.path.join(out_dir, "images"), exist_ok=True)

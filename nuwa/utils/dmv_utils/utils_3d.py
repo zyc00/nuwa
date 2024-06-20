@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def cart_to_hom(pts):
@@ -10,6 +9,7 @@ def cart_to_hom(pts):
     if isinstance(pts, np.ndarray):
         pts_hom = np.hstack((pts, np.ones((pts.shape[0], 1), dtype=np.float32)))
     else:
+        import torch
         ones = torch.ones((pts.shape[0], 1), dtype=torch.float32, device=pts.device)
         pts_hom = torch.cat((pts, ones), dim=1)
     return pts_hom
@@ -53,6 +53,7 @@ def camera_to_canonical(pts, pose):
         p = p.T
         return p
     else:
+        import torch
         pts = cart_to_hom(pts)
         pts = pts @ torch.inverse(pose).t()
         pts = hom_to_cart(pts)
@@ -72,6 +73,7 @@ def xyzr_to_pose4x4(x, y, z, r):
 
 
 def xyzr_to_pose4x4_torch(x, y, z, r):
+    import torch
     if isinstance(x, torch.Tensor):
         pose = torch.eye(4, device=x.device, dtype=torch.float)
         pose[0, 0] = torch.cos(r)
@@ -107,6 +109,7 @@ def camera_coordinate_to_world_coordinate(pts_in_camera, cam_pose):
         pts_hom = np.hstack((pts_in_camera, np.ones((pts_in_camera.shape[0], 1), dtype=np.float32)))
         pts_world = pts_hom @ cam_pose.T
     else:
+        import torch
         ones = torch.ones((pts_in_camera.shape[0], 1), dtype=torch.float32, device=pts_in_camera.device)
         pts_hom = torch.cat((pts_in_camera, ones), dim=1)
         cam_pose = torch.tensor(cam_pose).float().to(device=pts_in_camera.device)
@@ -127,6 +130,7 @@ def world_coordinate_to_camera_coordinate(pts_in_world, cam_pose):
         pts_hom = np.hstack((pts_in_world, np.ones((pts_in_world.shape[0], 1), dtype=np.float32)))
         pts_cam = pts_hom @ cam_pose_inv.T
     else:
+        import torch
         cam_pose = cam_pose.float().to(device=pts_in_world.device)
         cam_pose_inv = torch.inverse(cam_pose)
         ones = torch.ones((pts_in_world.shape[0], 1), dtype=torch.float32, device=pts_in_world.device)
@@ -216,6 +220,7 @@ def roty_torch(a):
     :return: np.ndarray of (N, 3, 3)
              rotation matrix
     """
+    import torch
     if isinstance(a, (int, float)):
         a = torch.tensor([a])
     a = a.float()
@@ -250,6 +255,7 @@ def rotz_np(a):
 
 
 def rotz_torch(a):
+    import torch
     if isinstance(a, (int, float)):
         a = torch.tensor([a])
     if a.shape[-1] != 1:
@@ -273,6 +279,7 @@ def rotx(t):
     :return: tensor of (N, 3, 3)
              rotation matrix
     """
+    import torch
     if isinstance(t, (int, float)):
         t = torch.tensor([t])
     if t.shape[-1] != 1:
@@ -302,6 +309,7 @@ def matrix_3x4_to_4x4(a):
             ones = np.array([[0, 0, 0, 1]])[None].repeat(a.shape[0], axis=0)
             return np.concatenate((a, ones), axis=1)
     else:
+        import torch
         ones = torch.tensor([[0, 0, 0, 1]]).float().to(device=a.device)
         if a.ndim == 3:
             ones = ones[None].repeat(a.shape[0], 1, 1)
@@ -316,6 +324,7 @@ def matrix_3x3_to_4x4(a):
     if isinstance(a, np.ndarray):
         ret = np.eye(4)
     else:
+        import torch
         ret = torch.eye(4).float().to(a.device)
     ret[:3, :3] = a
     return ret
@@ -388,6 +397,7 @@ def calc_pose(phis, thetas, size, radius=1.2):
 
 
 def voxel_iou(pred_, gt_):
+    import torch
     pred = pred_.clone()
     gt = gt_.clone()
 

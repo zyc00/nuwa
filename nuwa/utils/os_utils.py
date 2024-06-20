@@ -1,9 +1,12 @@
 import subprocess
 
+import nuwa
 
-def do_system(arg, verbose=False):
-    if verbose:
-        print(f"-> Running: {arg}")
+
+def do_system(arg):
+    nuwa.get_logger().debug("System running: {arg}")
+
+    if nuwa.get_log_level() == nuwa.logging.DEBUG:
         subprocess.check_call(arg)
     else:
         subprocess.check_call(

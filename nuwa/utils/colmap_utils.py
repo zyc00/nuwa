@@ -4,6 +4,7 @@ import time
 from copy import deepcopy
 from pathlib import Path
 
+import nuwa
 from nuwa.utils.os_utils import do_system
 
 
@@ -20,10 +21,10 @@ def run_colmap(
         from_db: str | None = None,
         db_only: bool = False,
         fix_image_pose: bool = False,
-        fix_intrinsics: bool = False,
-        verbose: bool = False
+        fix_intrinsics: bool = False
 ):
     start_time = time.time()
+    logger = nuwa.get_logger()
 
     if db_only:
         assert from_db is None
@@ -46,11 +47,11 @@ def run_colmap(
         os.makedirs(cache_dir, exist_ok=True)
         vocab_path = os.path.join(cache_dir, 'vocab.bin')
         if matcher == "sequential" and loop_detection and not os.path.exists(vocab_path):
-            print("INFO: colmap - downloading vocab tree")
+            logger.info(f"colmap - downloading vocab tree")
             do_system(("wget", "-O", f"{vocab_path}",
                        "https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"))
 
-        print(f"INFO: colmap - feature extraction ({camera_model=}, {single_camera=}, {heuristics=}, {with_cuda=})")
+        logger.info(f"colmap - feature extraction ({camera_model=}, {single_camera=}, {heuristics=}, {with_cuda=})")
         do_system((f"{colmap_binary}", "feature_extractor",
                    f"--ImageReader.camera_model={camera_model}",
                    f"--SiftExtraction.estimate_affine_shape=true",
@@ -59,22 +60,21 @@ def run_colmap(
                    f"--ImageReader.single_camera={single_camera}",
                    f"--database_path={db}",
                    f"--image_path={image_dir}") + (() if heuristics is None else
-                  (f"--ImageReader.camera_params={heuristics}",)), verbose)
+                  (f"--ImageReader.camera_params={heuristics}",)))
 
-        print(f"INFO: colmap - feature matching ({matcher=}, {loop_detection=})")
+        logger.info(f"colmap - feature matching ({matcher=}, {loop_detection=})")
         do_system((f"{colmap_binary}", f"{matcher}_matcher",
                    f"--SiftMatching.guided_matching=true",
                    f"--SiftMatching.use_gpu={with_cuda}",
                    f"--database_path={db}") + ((
                    f"--SequentialMatching.vocab_tree_path={vocab_path}",
-                   f"--SequentialMatching.loop_detection={loop_detection}") if matcher == "sequential" else ())
-                  , verbose)
+                   f"--SequentialMatching.loop_detection={loop_detection}") if matcher == "sequential" else ()))
     else:
         db = from_db
 
     if not db_only:
         if in_dir is None:
-            print(f"INFO: colmap - mapping ({fix_intrinsics=})")
+            logger.info(f"colmap - mapping ({fix_intrinsics=})")
             do_system((f"{colmap_binary}", "mapper",
                        f"--database_path={db}",
                        f"--image_path={image_dir}",
@@ -82,11 +82,11 @@ def run_colmap(
                        f"--Mapper.ba_refine_focal_length={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_refine_principal_point={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_refine_extra_params={1-int(fix_intrinsics)}",
-                       f"--Mapper.ba_global_function_tolerance=0.000001"), verbose)
+                       f"--Mapper.ba_global_function_tolerance=0.000001"))
             sparse = os.path.join(sparse, "0")
 
         else:
-            print(f"INFO: colmap - mapping ({fix_intrinsics=})")
+            logger.info(f"colmap - mapping ({fix_intrinsics=})")
             do_system((f"{colmap_binary}", "mapper",
                        f"--database_path={db}",
                        f"--image_path={image_dir}",
@@ -96,24 +96,20 @@ def run_colmap(
                        f"--Mapper.ba_refine_principal_point={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_refine_extra_params={1-int(fix_intrinsics)}",
                        f"--Mapper.ba_global_function_tolerance=0.000001",
-                       f"--Mapper.fix_existing_images={fix_image_pose}"), verbose)
+                       f"--Mapper.fix_existing_images={fix_image_pose}"))
 
-        print("INFO: colmap - bundle adjustment (refine_intrinsics=True)")
+        logger.info(f"colmap - bundle adjustment (fix_intrinsics=0)")
         do_system((f"{colmap_binary}", "bundle_adjuster",
                    f"--input_path={sparse}",
                    f"--output_path={sparse}",
                    f"--BundleAdjustment.refine_focal_length=1",     # on for all cases
                    f"--BundleAdjustment.refine_principal_point=1",
                    f"--BundleAdjustment.refine_extra_params=1",
-                   f"--BundleAdjustment.function_tolerance=0.000001"), verbose)
+                   f"--BundleAdjustment.function_tolerance=0.000001"))
 
-        print("INFO: colmap - model conversion")
-        do_system((f"{colmap_binary}", "model_converter",
-                   f"--input_path={sparse}",
-                   f"--output_path={sparse}",
-                   f"--output_type=TXT"), verbose)
+        colmap_convert_model(sparse, out_type="TXT", colmap_binary=colmap_binary)
 
-    print(f"INFO: colmap - finished in {time.time() - start_time:.2f} seconds")
+    logger.info(f"colmap - finished in {time.time() - start_time:.2f} seconds")
 
 
 def run_hloc(
@@ -125,10 +121,10 @@ def run_hloc(
         colmap_binary="colmap",
         single_camera=True,
         max_keypoints=20000,
-        use_pixsfm=False,
-        verbose=False
+        use_pixsfm=False
 ):
     start_time = time.time()
+    logger = nuwa.get_logger()
 
     try:
         from hloc import (
@@ -139,33 +135,33 @@ def run_hloc(
         )
         import pycolmap
     except ImportError:
-        print("hloc or pycolmap is not installed, run:")
-        print("pip install "
-              "pycolmap==0.6.1 "
-              "git+https://github.com/cvg/Hierarchical-Localization.git@e3e953f4db00c3b9b14951482349d5ddd9424452")
+        nuwa.get_logger().error(
+            f"hloc or pycolmap is not installed, run:\n"
+            f"pip install pycolmap==0.6.1 "
+            "git+https://github.com/cvg/Hierarchical-Localization.git@e3e953f4db00c3b9b14951482349d5ddd9424452"
+        )
         raise
 
     if use_pixsfm:
         try:
             from pixsfm.refine_hloc import PixSfM
         except ImportError:
-            print("WARNING: pixsfm is not installed")
-            print("Please follow setup_pixsfm.sh to install")
-            print("WARNING: pixsfm will be disabled")
+            logger.warning("pixsfm is not installed, please follow setup_pixsfm.sh to install.")
+            logger.warning("pixsfm will be disabled.")
             use_pixsfm = False
 
     if matcher != "sequential":
-        print("WARNING: only sequential matcher is supported for now")
-        print("WARNING: sequential matcher will be used anyway")
+        logger.warning("only sequential matcher is supported for now")
+        logger.warning("sequential matcher will be used anyway")
 
     if camera_model != "OPENCV":
-        print("WARNING: only OPENCV camera model is supported for now")
-        print("WARNING: OPENCV camera model will be used anyway")
+        logger.warning("only OPENCV camera model is supported for now")
+        logger.warning("OPENCV camera model will be used anyway")
         camera_model = "OPENCV"
 
     if colmap_binary != "colmap":
-        print("WARNING: only system default colmap is supported for now")
-        print("WARNING: system default colmap will be used anyway")
+        logger.warning("only system default colmap is supported for now")
+        logger.warning("system default colmap will be used anyway")
 
     out_dir = Path(out_dir)
     images = Path(image_dir)
@@ -183,7 +179,7 @@ def run_hloc(
 
     references = [str(p.relative_to(images)) for p in images.iterdir()
                   if str(p).endswith('jpg') or str(p).endswith('png')]
-    print(len(references), "mapping images")
+    logger.info(f"hloc - {len(references)} mapping images")
 
     feature_conf = deepcopy(extract_features.confs['disk'])
     feature_conf["model"]["max_keypoints"] = max_keypoints
@@ -231,7 +227,7 @@ def run_hloc(
             camera_mode=camera_mode,
             image_options=image_options,
             mapper_options=mapper_options,
-            verbose=verbose
+            verbose=(nuwa.get_log_level() == nuwa.logging.DEBUG)
         )
     else:
         model = reconstruction.main(
@@ -240,27 +236,27 @@ def run_hloc(
             camera_mode=camera_mode,
             image_options=image_options,
             mapper_options=mapper_options,
-            verbose=verbose
+            verbose=(nuwa.get_log_level() == nuwa.logging.DEBUG)
         )
 
     model.write(str(cameras))
     model.write_text(str(cameras))
 
-    print(f"hloc finished in {time.time() - start_time:.2f} seconds")
+    nuwa.get_logger().info(f"hloc finished in {time.time() - start_time:.2f} seconds")
 
 
-def colmap_convert_model(camera_dir, out_dir=None, out_type="TXT", colmap_binary="colmap", verbose=False):
+def colmap_convert_model(camera_dir, out_dir=None, out_type="TXT", colmap_binary="colmap"):
     if out_dir is None:
         out_dir = camera_dir
 
-    print("INFO: colmap - model conversion")
+    nuwa.get_logger().info(f"colmap - model conversion (to {out_type})")
     do_system((f"{colmap_binary}", "model_converter",
                f"--input_path={camera_dir}",
                f"--output_path={out_dir}",
-               f"--output_type={out_type}"), verbose)
+               f"--output_type={out_type}"))
 
 
-def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colmap", verbose=False):
+def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colmap"):
     """
     Undistort images using the camera parameters from colmap.
     args:
@@ -269,12 +265,12 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
         out_dir: str, path to the output directory
         colmap_binary: str, path to the colmap binary
     """
-    print("INFO: colmap - image undistortion")
+    nuwa.get_logger().info("colmap - image undistortion")
     do_system((f"{colmap_binary}", "image_undistorter",
                f"--image_path={image_dir}",
                f"--input_path={sparse_dir}",
                f"--output_path={out_dir}",
-               f"--output_type=COLMAP"), verbose)
+               f"--output_type=COLMAP"))
 
     sparse0 = f"{out_dir}/sparse/0"
     if not os.path.exists(sparse0):
@@ -283,10 +279,10 @@ def colmap_undistort_images(image_dir, sparse_dir, out_dir, colmap_binary="colma
         shutil.move(f"{out_dir}/sparse/images.bin", sparse0)
         shutil.move(f"{out_dir}/sparse/points3D.bin", sparse0)
 
-    colmap_convert_model(sparse0, colmap_binary=colmap_binary, verbose=verbose)
+    colmap_convert_model(sparse0, colmap_binary=colmap_binary)
 
 
-def get_name2id_from_colmap_db(path, verbose=False):
+def get_name2id_from_colmap_db(path):
     """
     Read the colmap database file.
     args:
@@ -297,16 +293,12 @@ def get_name2id_from_colmap_db(path, verbose=False):
     conn = sqlite3.connect(path)
     c = conn.cursor()
 
-    if verbose:
-        print(path)
-        print(c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+    nuwa.get_logger().debug(path)
+    nuwa.get_logger().debug(c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
 
     images = {}
     for row in c.execute("SELECT * FROM images"):
         image_id, name, *_ = row
         images[name] = image_id
-
-    if verbose:
-        print(images)
 
     return images
