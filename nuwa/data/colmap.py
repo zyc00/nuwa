@@ -221,7 +221,7 @@ class Reconstruction:
                 pass
 
         colmap_convert_model(output_folder, out_type="BIN")
-        self.export_point_cloud(os.path.join(output_folder, 'colmap_points.ply'))
+        self.export_point_cloud(os.path.join(output_folder, 'vis.ply'))
 
     def export_point_cloud(self, path, write_text=False):
         if path.endswith('.ply'):

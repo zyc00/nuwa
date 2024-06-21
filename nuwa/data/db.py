@@ -49,7 +49,8 @@ class NuwaDB:
         # check if close to (0, 0, 1)
         if up[2] < 0.95:
             nuwa.get_logger().warning(f"avg up {tuple(up)} is not close to +z, "
-                                      f"please check if the extrinsics are correct.")
+                                      f"the camera poses might need further post-processing.")
+            # TODO: write this post-processing
         else:
             nuwa.get_logger().info(f"avg up {tuple(up)}")
 
@@ -285,12 +286,15 @@ class NuwaDB:
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        nuwa.get_logger().info(f"please use GUI to perform extrinsic optimization and dump pose now (select no quat)`")
+        nuwa.get_logger().info(f"ingp - "
+                               f"please use GUI to perform extrinsic optimization and dump pose now (check no quat)`")
         do_system((ingp_binary, tmp_json, "--no-train"))
 
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
         refined_json = json.load(open(refined_json, "r"))
 
+        err_r_max = 0
+        err_t_max = 0
         self.frames = sorted(self.frames, key=lambda x: x.image_path)
         for i, f in enumerate(self.frames):
             refined = refined_json[i]
@@ -302,10 +306,14 @@ class NuwaDB:
             err = f.pose @ np.linalg.inv(pose)
             err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
             err_t = np.linalg.norm(err[:3, 3])
-            nuwa.get_logger().debug(f"Fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
+            nuwa.get_logger().debug(f"ingp - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
+
+            err_r_max = max(err_r_max, err_r)
+            err_t_max = max(err_t_max, err_t)
 
             f.pose = pose
 
+        nuwa.get_logger().info(f"ingp - finetune results: {err_r_max=:.3f}, {err_t_max=:.5f}")
         self.colmap_reconstruction.update_poses_from_frames(self.frames)
         shutil.rmtree(tmp_dump)
 
@@ -330,9 +338,9 @@ class NuwaDB:
             raise ValueError("No colmap reconstruction found")
 
         if self.source == "colmap":
-            nuwa.get_logger().warning("fine-tuning with colmap on a colmap sourced database")
+            nuwa.get_logger().warning("colmap ft - fine-tuning with colmap on a colmap sourced database")
 
-        nuwa.get_logger().info("up before fine-tuning:")
+        nuwa.get_logger().info("colmap ft - up before fine-tuning:")
         self.get_up()
 
         colmap_in_dir = tempfile.mkdtemp()
@@ -360,7 +368,7 @@ class NuwaDB:
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
 
-        nuwa.get_logger().info("colmap - point triangulation")
+        nuwa.get_logger().info("colmap ft - point triangulation")
         do_system((f"{colmap_binary}", "point_triangulator",
                    f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                    f"--image_path={self.colmap_reconstruction.image_dir}",
@@ -395,9 +403,9 @@ class NuwaDB:
         self.colmap_reconstruction = new_db.colmap_reconstruction
         self.scale_denorm = new_db.scale_denorm
 
-        nuwa.get_logger().info(f"colmap fine-tuning done, "
+        nuwa.get_logger().info(f"colmap ft - fine-tuning done, "
                                f"reconstruction contains {len(self.colmap_reconstruction.points)} points")
-        nuwa.get_logger().info("up after fine-tuning:")
+        nuwa.get_logger().info("colmap ft - up after fine-tuning:")
         self.get_up()
 
         if undistort and self.frames[0].camera.type == "OPENCV":
@@ -459,7 +467,7 @@ class NuwaDB:
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
 
-        nuwa.get_logger().info("colmap - Triangulating points...")
+        nuwa.get_logger().info("colmap points - Triangulating...")
         do_system((f"{colmap_binary}", "point_triangulator",
                    f"--database_path={os.path.join(colmap_out_dir, 'database.db')}",
                    f"--image_path={image_dir}",

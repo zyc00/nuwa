@@ -80,8 +80,8 @@ def main():
     args = get_args()
 
     if args.verbose:
-        nuwa.get_logger().warning("--verbose flag is deprecated, use --log-level/-l DEBUG/INFO/WARNING/ERROR instead")
         nuwa.set_log_level(nuwa.logging.DEBUG)
+        nuwa.get_logger().warning("`--verbose` flag is deprecated, use `-l DEBUG` instead")
     else:
         nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
 
@@ -232,7 +232,7 @@ def main():
         copy_images_to=copy_images_to
     )
 
-    with open(os.path.join(out_dir, "argv.txt"), "w") as f:
+    with open(os.path.join(out_dir, "nuwa_argv.txt"), "w") as f:
         f.write(" ".join(sys.argv))
 
 
@@ -243,7 +243,7 @@ def colmap():
         parser.add_argument("--input-dir", "-i", type=str, default="",
                             help="Path to the nuwadb")
 
-        parser.add_argument("--out-dir", "-o", type=str, default="",
+        parser.add_argument("--out-dir", "-o", type=str, default=None,
                             help="Path to the output dir")
 
         parser.add_argument("--colmap-binary", type=str, default="colmap",
@@ -265,8 +265,8 @@ def colmap():
     args = get_args()
 
     if args.verbose:
-        nuwa.get_logger().warning("--verbose flag is deprecated, use --log-level/-l DEBUG/INFO/WARNING/ERROR instead")
         nuwa.set_log_level(nuwa.logging.DEBUG)
+        nuwa.get_logger().warning("`--verbose` flag is deprecated, use `-l DEBUG` instead")
     else:
         nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
 
@@ -276,22 +276,36 @@ def colmap():
     loop_detection = not args.no_loop_detection
     matcher = args.matcher
 
-    os.makedirs(out_dir, exist_ok=False)
+    if out_dir is None:
+        out_dir = nuwa_dir
+        write_sparse_only = True
+        nuwa.get_logger().warning("Output directory is not specified, overwriting sparse in the input directory...")
+    else:
+        write_sparse_only = False
+        os.makedirs(out_dir, exist_ok=False)
 
     db = from_nuwadb(os.path.join(nuwa_dir, "nuwa_db.json"))
     db.generate_points_colmap(matcher=matcher, colmap_binary=colmap_binary, loop_detection=loop_detection)
 
-    os.makedirs(os.path.join(out_dir, "images"), exist_ok=True)
-    os.makedirs(os.path.join(out_dir, "masks"), exist_ok=True)
-    db.dump(
-        os.path.join(out_dir, "nuwa_db.json"),
-        copy_images_to=os.path.join(out_dir, "images"),
-        copy_masks_to=os.path.join(out_dir, "masks"),
-        dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
-    )
+    if write_sparse_only:
+        db.dump_reconstruction(os.path.join(out_dir, "sparse/0"))
+        # TODO: update db.colmap_path
 
-    with open(os.path.join(out_dir, "argv.txt"), "w") as f:
-        f.write(" ".join(sys.argv))
+        with open(os.path.join(out_dir, "nuwa-colmap_argv.txt"), "w") as f:
+            f.write(" ".join(sys.argv))
+
+    else:
+        os.makedirs(os.path.join(out_dir, "images"), exist_ok=True)
+        os.makedirs(os.path.join(out_dir, "masks"), exist_ok=True)
+        db.dump(
+            os.path.join(out_dir, "nuwa_db.json"),
+            copy_images_to=os.path.join(out_dir, "images"),
+            copy_masks_to=os.path.join(out_dir, "masks"),
+            dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
+        )
+
+        with open(os.path.join(out_dir, "nuwa-colmap_argv.txt"), "w") as f:
+            f.write(" ".join(sys.argv))
 
 
 if __name__ == "__main__":
