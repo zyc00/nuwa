@@ -147,7 +147,7 @@ class NuwaDB:
         :return:
         """
         from nuwa.utils.seg_utils import segment_img, sam, scene_carving, crop_images, SAMAPI
-        from nuwa.utils.dmv_utils import raft_api
+        from nuwa.utils import raft_api
 
         # TODO: fix this
         if self.colmap_reconstruction is not None and self.source == "colmap":

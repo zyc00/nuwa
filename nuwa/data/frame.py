@@ -3,8 +3,8 @@ import os.path
 import numpy as np
 
 from nuwa.data.camera import _Camera, OpenCvCamera, PinholeCamera
-from nuwa.utils.image_utils import sharpness
 from nuwa.utils.pose_utils import convert_camera_pose
+from nuwa.utils.image_utils import sharpness
 
 
 class Frame:

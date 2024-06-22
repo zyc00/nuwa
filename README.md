@@ -133,6 +133,7 @@ Example:
 2. Pass `--object` to indicate the scene needs normalization and segmentation.
 
 ## TODO
+- [ ] Reorganize transformations in reconstruction
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
 - [ ] More camera normalization options

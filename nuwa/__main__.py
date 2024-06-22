@@ -1,11 +1,8 @@
-import shutil
 import sys
 import tempfile
 
 import nuwa
 from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap, from_dear
-from nuwa.utils.colmap_utils import run_colmap
-from nuwa.utils.os_utils import do_system
 
 
 def main():
@@ -25,7 +22,7 @@ def main():
         parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
                             help="Output directory")
 
-        parser.add_argument("--fps", type=int, default=3, help="FPS for video inputs")
+        parser.add_argument("--fps", type=float, default=3, help="FPS for video inputs")
         parser.add_argument("--dear-sample-stride", type=int, default=1, help="Stride for DEAR frame sampling")
         parser.add_argument("--discard-border-rate", type=float, default=0.0)
         parser.add_argument("--portrait", action="store_true",

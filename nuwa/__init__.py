@@ -88,9 +88,9 @@ def _init_logger():
     logger = logging.getLogger("nuwa")
     c_handler = logging.StreamHandler(stream=sys.stdout)
     c_handler.setFormatter(_NuwaFormatter())
-    c_handler.setLevel(logging.WARNING)
+    c_handler.setLevel(logging.INFO)
     logger.addHandler(c_handler)
-    logger.setLevel(logging.WARNING)
+    logger.setLevel(logging.INFO)
 
 
 _init_logger()

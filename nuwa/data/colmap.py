@@ -9,6 +9,7 @@ import nuwa
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import colmap_convert_model
 from nuwa.utils.pose_utils import rotmat2qvec
+from nuwa.utils.utils_3d import save_ply
 
 
 class Reconstruction:
@@ -32,7 +33,10 @@ class Reconstruction:
         self.images = self._load_images(folder_path)
         self.image_dir = image_dir
 
-        nuwa.get_logger().info(f"{len(self.cameras)} cameras, {len(self.points)} points, {len(self.images)} images "
+        nuwa.get_logger().info(f"nrecon - "
+                               f"{len(self.cameras)} cameras, "
+                               f"{len(self.points)} points, "
+                               f"{len(self.images)} images "
                                f"loaded to colmap reconstruction.")
 
     @classmethod
@@ -53,7 +57,7 @@ class Reconstruction:
         obj.images = images
         obj.image_dir = image_dir
 
-        nuwa.get_logger().info(f"{len(cameras)} cameras, {len(points)} points, {len(images)} images "
+        nuwa.get_logger().info(f"nrecon - {len(cameras)} cameras, {len(points)} points, {len(images)} images "
                                f"loaded to colmap reconstruction.")
 
         return obj
@@ -229,14 +233,7 @@ class Reconstruction:
             colors = np.array([point['rgb'] for point in self.points.values()])
             points = np.hstack([points, colors])
 
-            vertices = []
-            for i, point in enumerate(points):
-                vertices.append((point[0], point[1], point[2], point[3], point[4], point[5]))
-
-            vertices = np.array(vertices, dtype=[
-                ('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
-            ply = plyfile.PlyData([plyfile.PlyElement.describe(vertices, 'vertex')], text=write_text)
-            ply.write(path)
+            save_ply(points, path, write_text=write_text)
 
         elif path.endswith('.xyz'):
             with open(path, 'w') as file:

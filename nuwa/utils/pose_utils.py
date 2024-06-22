@@ -1,7 +1,5 @@
 import numpy as np
 
-from nuwa.utils.dmv_utils import utils_3d
-
 
 def convert_camera_pose(pose, in_type, out_type):
     accepted_types = ["cv", "gl", "blender"]

@@ -5,6 +5,7 @@ import tempfile
 import tqdm
 import numpy as np
 from PIL import Image
+from copy import deepcopy as copy
 
 import nuwa
 from nuwa.data.colmap import Reconstruction
@@ -12,17 +13,25 @@ from nuwa.data.db import NuwaDB
 from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, colmap_undistort_images
-from nuwa.utils.dmv_utils import utils_3d
+from nuwa.utils.floor_utils import get_upright_transformation
+from nuwa.utils.utils_3d import Rt_to_pose, rotx_np, rotz_np
 from nuwa.utils.image_utils import center_crop_and_update_intrinsics, sharpness
-from nuwa.utils.os_utils import do_system
-from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices
-from nuwa.utils.video_utils import run_ffmpeg
+from nuwa.utils.os_utils import do_system, run_ffmpeg
+from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices, rotmat2qvec
 
 
 def from_reconstruction(
         reconstruction: Reconstruction,
         fix_up=False
 ):
+    reconstruction = copy(reconstruction)
+
+    if fix_up:
+        xyz = np.array([p["xyz"] for p in reconstruction.points.values()])
+        xyz = xyz @ Rt_to_pose(rotx_np(-np.pi / 2)[0])[:3, :3].T
+        up_R, up_t = get_upright_transformation(xyz)
+        xyz = xyz @ up_R.T + up_t
+
     frames = []
     for image_id, image in reconstruction.images.items():
         camera_id = image["camera_id"]
@@ -44,7 +53,14 @@ def from_reconstruction(
         c2w = np.linalg.inv(w2c)
 
         if fix_up:
-            c2w = utils_3d.Rt_to_pose(utils_3d.rotx_np(-np.pi / 2)[0]) @ c2w  # world z up
+            z_transform = np.ones((4, 4))
+            z_transform[:3, :3] = up_R
+            z_transform[:3, 3] = up_t
+
+            c2w = z_transform @ Rt_to_pose(rotx_np(-np.pi / 2)[0]) @ c2w  # world z up
+            Rt = np.linalg.inv(c2w)
+            reconstruction.images[image_id]["tvec"] = Rt[:3, 3]
+            reconstruction.images[image_id]["qvec"] = -rotmat2qvec(Rt[:3, :3])
 
         frame = Frame(
             camera=camera,
@@ -54,6 +70,11 @@ def from_reconstruction(
             seq_id=image_id
         )
         frames.append(frame)
+
+    # transform points
+    if fix_up:
+        for p, point in zip(xyz, reconstruction.points):
+            reconstruction.points[point]["xyz"] = p
 
     return NuwaDB(
         source="colmap",
@@ -146,7 +167,7 @@ def from_polycam(
         ])
         pose = convert_camera_pose(pose, "blender", "cv")
         image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
-        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose  # fix up
+        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
 
         if should_be_portrait:
             if w >= h:
@@ -170,7 +191,7 @@ def from_polycam(
             if should_be_portrait:
                 image = image.rotate(270, expand=True)
                 pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-                pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+                pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
 
             image_path = os.path.abspath(os.path.join(new_image_dir, f"{uids[i]}.jpg"))
             image.save(image_path)
@@ -184,7 +205,7 @@ def from_polycam(
                     image = image.rotate(270, expand=True)
                     image.save(new_image_path)
                     pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-                    pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+                    pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
                 else:
                     shutil.copy2(image_path, new_image_path)
 
@@ -256,7 +277,7 @@ def from_3dscannerapp(
 
         intrinsics = camera_json["intrinsics"]
         image_path = os.path.abspath(os.path.join(file_dir, jpg_name))
-        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose
+        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose
 
         if new_image_dir is not None:
             new_image_path = os.path.join(new_image_dir, os.path.basename(image_path))
@@ -352,12 +373,12 @@ def from_dear(
 
         fx, fy, cx, cy = intrinsic[0, 0], intrinsic[1, 1], intrinsic[0, 2], intrinsic[1, 2]
         pose = convert_camera_pose(transform, "blender", "cv")
-        pose = utils_3d.Rt_to_pose(utils_3d.rotx_np(np.pi / 2)[0]) @ pose  # fix up
+        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
 
         image = Image.open(frame_path)
         if should_be_portrait:
             pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-            pose = utils_3d.Rt_to_pose(utils_3d.rotz_np(np.pi)[0]) @ pose  # fix up
+            pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
 
         camera = PinholeCamera(w, h, fx, fy, cx, cy)
         image_path = os.path.abspath(frame_path)
@@ -404,6 +425,7 @@ def from_image_folder(
         colmap_out_dir="",
         colmap_binary="colmap",
         colmap_loop_detection=True,
+        colmap_fix_up=True,
         hloc_max_keypoints=20000,
         hloc_use_pixsfm=False
 ):
@@ -419,6 +441,7 @@ def from_image_folder(
     :param colmap_out_dir: output directory for colmap data
     :param colmap_binary: path to colmap binary
     :param colmap_loop_detection: run loop detection in colmap
+    :param colmap_fix_up: rotate up to +z
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
     """
@@ -488,7 +511,7 @@ def from_image_folder(
         nuwa.get_logger().warning("multiple models generated")
         nuwa.get_logger().warning("only model 0 is processed")
 
-    return from_colmap(img_dir, os.path.join(new_sparse_dir, "0"))
+    return from_colmap(img_dir, os.path.join(new_sparse_dir, "0"), fix_up=colmap_fix_up)
 
 
 def from_video(
@@ -503,6 +526,7 @@ def from_video(
         colmap_out_dir="",
         colmap_binary="colmap",
         colmap_loop_detection=True,
+        colmap_fix_up=True,
         hloc_max_keypoints=20000,
         hloc_use_pixsfm=False
 ):
@@ -518,6 +542,7 @@ def from_video(
     :param colmap_out_dir: output directory for colmap data
     :param colmap_binary: path to colmap binary
     :param colmap_loop_detection: run loop detection in colmap
+    :param colmap_fix_up: rotate up to +z
     :param hloc_max_keypoints: max keypoints for hloc
     :param hloc_use_pixsfm: use pixsfm for hloc
     """
@@ -539,6 +564,7 @@ def from_video(
         colmap_out_dir=colmap_out_dir,
         colmap_binary=colmap_binary,
         colmap_loop_detection=colmap_loop_detection,
+        colmap_fix_up=colmap_fix_up,
         hloc_max_keypoints=hloc_max_keypoints,
         hloc_use_pixsfm=hloc_use_pixsfm,
     )

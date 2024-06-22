@@ -3,11 +3,14 @@
 import os
 import os.path as osp
 
+import cv2
 from PIL.Image import Resampling
 
 import nuwa
+from nuwa.utils import utils_3d
 
 try:
+    import torch
     from rembg import new_session, remove
     from segment_anything import sam_model_registry, SamPredictor
 except ImportError:
@@ -15,9 +18,6 @@ except ImportError:
                             '`pip install "rembg>=2.0.57" "torch>=2.0.0" "torchvision>=0.16.0" '
                             'git+https://github.com/facebookresearch/segment-anything.git`')
     raise
-
-from .dmv_utils import plt_utils, utils_3d
-from .dmv_utils.backproject import generate_grid
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,6 +41,87 @@ class RembgHelper:
     def remove(img):
         session = RembgHelper.getinstance()
         return remove(img, session=session)
+
+
+def findContours(*args, **kwargs):
+    """
+    Wraps cv2.findContours to maintain compatiblity between versions
+    3 and 4
+
+    Returns:
+        contours, hierarchy
+    """
+    if cv2.__version__.startswith('4'):
+        contours, hierarchy = cv2.findContours(*args, **kwargs)
+    elif cv2.__version__.startswith('3'):
+        _, contours, hierarchy = cv2.findContours(*args, **kwargs)
+    else:
+        raise AssertionError(
+            'cv2 must be either version 3 or 4 to call this method')
+
+    return contours, hierarchy
+
+
+def vis_mask(img,
+             mask,
+             color=[255, 255, 255],
+             alpha=0.4,
+             show_border=True,
+             border_alpha=0.5,
+             border_thick=1,
+             border_color=None):
+    """
+    Visualizes a single binary mask.
+    :param img: H,W,3, uint8, np.ndarray
+    :param mask: H,W, bool or uint8(0,1). np.ndarray
+    :param color:
+    :param alpha:
+    :param show_border:
+    :param border_alpha:
+    :param border_thick:
+    :param border_color:
+    :return:
+    """
+    img = img.astype(np.float32)
+    mask = (mask > 0).astype(np.uint8)
+    idx = np.nonzero(mask)
+
+    img[idx[0], idx[1], :] *= 1.0 - alpha
+    img[idx[0], idx[1], :] += [alpha * x for x in color]
+
+    if show_border:
+        contours, _ = findContours(
+            mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        # contours = [c for c in contours if c.shape[0] > 10]
+        if border_color is None:
+            border_color = color
+        if not isinstance(border_color, list):
+            border_color = border_color.tolist()
+        if border_alpha < 1:
+            with_border = img.copy()
+            cv2.drawContours(with_border, contours, -1, border_color,
+                             border_thick, cv2.LINE_AA)
+            img = (1 - border_alpha) * img + border_alpha * with_border
+        else:
+            cv2.drawContours(img, contours, -1, border_color, border_thick,
+                             cv2.LINE_AA)
+
+    return img.astype(np.uint8)
+
+
+@torch.no_grad()
+def generate_grid(n_vox, interval, dtype=torch.float32, device='cuda'):
+    # global grid_
+    # if grid_ is None:
+    grid_range = [torch.arange(0, n_vox[axis], interval, device=device) for axis in range(3)]
+    grid = torch.stack(torch.meshgrid(grid_range[0], grid_range[1], grid_range[2], indexing='ij'))
+    grid = grid.unsqueeze(0).to(dtype=dtype)  # 1 3 dx dy dz
+    grid = grid.view(1, 3, -1)
+    grid_ = grid
+    # else:
+    #     pass
+    # print("reuse grid")
+    return grid_
 
 
 def scene_carving(masks, Ks, camera_poses):
@@ -228,6 +309,6 @@ class SAMAPI:
                     plt.scatter(point_coords[i, 0], point_coords[i, 1], c='g' if point_labels[i] == 1 else 'r', s=2)
             plt.subplot(1, 2, 2)
             plt.title("sam output")
-            plt.imshow(plt_utils.vis_mask(rgb, mask.astype(np.uint8), [0, 255, 0]))
+            plt.imshow(vis_mask(rgb, mask.astype(np.uint8), [0, 255, 0]))
             plt.show()
         return mask
