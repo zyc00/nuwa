@@ -57,22 +57,22 @@ class NuwaDB:
             up += -f.pose[:3, 1]
         up = up / np.linalg.norm(up)
 
-        nuwa.get_logger().info(f"Camera avg up {tuple(up)}")
+        nuwa.get_logger().info(f"get_world_up - Camera avg up {tuple(up)}")
 
         if np.abs(up).max() != abs(up[2]):
-            nuwa.get_logger().warning(f"It seems that the camera avg up is not close to +z. You may want to check"
-                                      f"the gravity direction manually.")
+            nuwa.get_logger().warning(f"get_world_up - It seems that the camera avg up is not close to +z. "
+                                      f"You may want to check the gravity direction manually.")
         elif up[2] < 0.9:
-            nuwa.get_logger().warning(f"Camera avg up {tuple(up)} is not close to +z, "
+            nuwa.get_logger().warning(f"get_world_up - Camera avg up {tuple(up)} is not close to +z, "
                                       f"this is likely due to biased capturing.")
 
         if self.z_up:
-            nuwa.get_logger().info("DB has been marked z_up, world up is set to +z.")
+            nuwa.get_logger().info("get_world_up - DB has been marked z_up, world up is set to +z.")
             return np.array([0., 0., 1.])
 
         else:
             if self.source != "colmap":
-                nuwa.get_logger().warning(f"Data sourced from {self.source}, but not marked z_up. "
+                nuwa.get_logger().warning(f"get_world_up - Data sourced from {self.source}, but not marked z_up. "
                                           f"This is likely a bug.")
             return up
 
