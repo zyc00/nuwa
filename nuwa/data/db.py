@@ -24,12 +24,23 @@ class NuwaDB:
     colmap_reconstruction: Reconstruction | None
 
     scale_denorm: float | None     # scale_denorm for normalizing the scene into, typically into (-1, 1)
+    z_up: bool
 
-    def __init__(self, source="", frames=None, colmap_reconstruction=None, scale_denorm=None):
+    def __init__(self, source="", frames=None, colmap_reconstruction=None, scale_denorm=None, z_up=None):
         self.source = source
+        if self.source == "polycam":
+            nuwa.get_logger().warning("Polycam data source is deprecated, please use 'arkit' instead.")
+        else:
+            assert self.source in ["arkit", "colmap"], f"Unknown data source {self.source}."
+
         self.frames = [] if frames is None else frames
         self.colmap_reconstruction = deepcopy(colmap_reconstruction)
         self.scale_denorm = scale_denorm
+
+        if z_up is None:
+            self.z_up = self.source in ["arkit", "polycam"]
+        else:
+            self.z_up = z_up
 
     def __repr__(self):
         return {
@@ -39,36 +50,31 @@ class NuwaDB:
             "scale_denorm": "...Data Not Normalized..." if self.scale_denorm is None else self.scale_denorm
         }.__repr__()
 
-    def get_up(self):
-        # legacy
+    def get_world_up(self):
+        # calc camera avg up
         up = np.zeros(3)
         for f in self.frames:
             up += -f.pose[:3, 1]
         up = up / np.linalg.norm(up)
 
-        # check if close to (0, 0, 1)
-        if up[2] < 0.95:
-            nuwa.get_logger().warning(f"avg up {tuple(up)} is not close to +z, "
-                                      f"the camera poses might need further post-processing.")
-            # TODO: write this post-processing
-        else:
-            nuwa.get_logger().info(f"avg up {tuple(up)}")
+        nuwa.get_logger().info(f"Camera avg up {tuple(up)}")
 
-        if self.source == "colmap":
-            # return up
-            if up[2] > 0.99:
-                return np.array([0., 0., 1.])
-            else:
-                nuwa.get_logger().warning(f"colmap source detected, but up is not close to +z, "
-                                          f"please check if the extrinsics are correct.")
-                return up
-        elif self.source == "arkit":
+        if np.abs(up).max() != abs(up[2]):
+            nuwa.get_logger().warning(f"It seems that the camera avg up is not close to +z. You may want to check"
+                                      f"the gravity direction manually.")
+        elif up[2] < 0.9:
+            nuwa.get_logger().warning(f"Camera avg up {tuple(up)} is not close to +z, "
+                                      f"this is likely due to biased capturing.")
+
+        if self.z_up:
+            nuwa.get_logger().info("DB has been marked z_up, world up is set to +z.")
             return np.array([0., 0., 1.])
-        elif self.source == "polycam":
-            nuwa.get_logger().warning("deprecated source name 'polycam' detected, assuming 'arkit'")
-            return np.array([0., 0., 1.])
+
         else:
-            raise ValueError(f"Unknown source {self.source}")
+            if self.source != "colmap":
+                nuwa.get_logger().warning(f"Data sourced from {self.source}, but not marked z_up. "
+                                          f"This is likely a bug.")
+            return up
 
     def dump(self,
              out_json_path,
@@ -106,7 +112,7 @@ class NuwaDB:
 
         db = {
             "source": self.source,
-            "up": self.get_up().tolist(),
+            "up": self.get_world_up().tolist(),
         }
 
         if self.scale_denorm is not None:
@@ -346,8 +352,8 @@ class NuwaDB:
         if self.source == "colmap":
             nuwa.get_logger().warning("colmap ft - fine-tuning with colmap on a colmap sourced database")
 
-        nuwa.get_logger().info("colmap ft - up before fine-tuning:")
-        self.get_up()
+        nuwa.get_logger().info("colmap ft - camera avg up before fine-tuning:")
+        self.get_world_up()
 
         colmap_in_dir = tempfile.mkdtemp()
         self.dump_reconstruction(colmap_in_dir)
@@ -411,8 +417,8 @@ class NuwaDB:
 
         nuwa.get_logger().info(f"colmap ft - fine-tuning done, "
                                f"reconstruction contains {len(self.colmap_reconstruction.points)} points")
-        nuwa.get_logger().info("colmap ft - up after fine-tuning:")
-        self.get_up()
+        nuwa.get_logger().info("colmap ft - camera avg up after fine-tuning:")
+        self.get_world_up()
 
         if undistort and self.frames[0].camera.type == "OPENCV":
             undistort_dir = tempfile.mkdtemp()
@@ -435,8 +441,8 @@ class NuwaDB:
             self.colmap_reconstruction = new_db.colmap_reconstruction
             self.scale_denorm = new_db.scale_denorm
 
-            nuwa.get_logger().info("up after undistort:")
-            self.get_up()
+            nuwa.get_logger().info("camera avg up after undistort:")
+            self.get_world_up()
 
             shutil.rmtree(undistort_dir)
 

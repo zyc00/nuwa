@@ -67,7 +67,8 @@ def from_reconstruction(
     return NuwaDB(
         source="colmap",
         frames=sorted(frames, key=lambda x: x.image_path),
-        colmap_reconstruction=reconstruction
+        colmap_reconstruction=reconstruction,
+        z_up=fix_up
     )
 
 
@@ -220,7 +221,8 @@ def from_polycam(
     return NuwaDB(
         source="arkit",
         frames=frames,
-        colmap_reconstruction=Reconstruction.from_frames(frames)
+        colmap_reconstruction=Reconstruction.from_frames(frames),
+        z_up=True
     )
 
 
@@ -288,7 +290,8 @@ def from_3dscannerapp(
     return NuwaDB(
         source="arkit",
         frames=frames,
-        colmap_reconstruction=Reconstruction.from_frames(frames)
+        colmap_reconstruction=Reconstruction.from_frames(frames),
+        z_up=True
     )
 
 
@@ -386,7 +389,8 @@ def from_dear(
     return NuwaDB(
         source="arkit",
         frames=frames,
-        colmap_reconstruction=Reconstruction.from_frames(frames)
+        colmap_reconstruction=Reconstruction.from_frames(frames),
+        z_up=True
     )
 
 
