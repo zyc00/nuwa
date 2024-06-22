@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nuwa',
-    version='0.0.80',
+    version='0.0.82',
     description='',
     author='Xiaoshuai Jet Zhang',
     author_email='jetgabr@gmail.com',
@@ -16,7 +16,6 @@ setup(
         'tqdm>=4.0.0',
         'easydict>=1.0',
         'plyfile>=1.0.3',
-        'rich>=11.0.0',
         'pyransac3d>=0.6.0'
     ],
     classifiers=[

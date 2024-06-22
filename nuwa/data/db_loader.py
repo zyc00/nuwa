@@ -14,10 +14,9 @@ from nuwa.data.camera import OpenCvCamera, PinholeCamera
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, colmap_undistort_images
 from nuwa.utils.floor_utils import get_upright_transformation
-from nuwa.utils.utils_3d import Rt_to_pose, rotx_np, rotz_np
 from nuwa.utils.image_utils import center_crop_and_update_intrinsics, sharpness
 from nuwa.utils.os_utils import do_system, run_ffmpeg
-from nuwa.utils.pose_utils import qvec2rotmat, convert_camera_pose, get_rot90_camera_matrices, rotmat2qvec
+from nuwa.utils.pose_utils import rt2pose, qt2pose, rotx_np, rotz_np, convert_camera_pose, get_rot90_camera_matrices
 
 
 def from_reconstruction(
@@ -27,10 +26,13 @@ def from_reconstruction(
     reconstruction = copy(reconstruction)
 
     if fix_up:
+        z_rot = rt2pose(rotx_np(-np.pi / 2)[0])[:3, :3]  # world -y up to +z up
+
         xyz = np.array([p["xyz"] for p in reconstruction.points.values()])
-        xyz = xyz @ Rt_to_pose(rotx_np(-np.pi / 2)[0])[:3, :3].T
-        up_R, up_t = get_upright_transformation(xyz)
-        xyz = xyz @ up_R.T + up_t
+        xyz = xyz @ z_rot.T
+
+        up_R, up_t = get_upright_transformation(xyz, z_thresh=0.2)  # real +z up according to floor
+        world_transform = rt2pose(up_R @ z_rot, up_t)
 
     frames = []
     for image_id, image in reconstruction.images.items():
@@ -45,36 +47,22 @@ def from_reconstruction(
         else:
             raise ValueError(f"Unknown camera model: {camera_model}")
 
-        r = image["qvec"]
-        t = image["tvec"]
-        r = qvec2rotmat(-r)
-        t = t.reshape([3, 1])
-        w2c = np.concatenate([np.concatenate([r, t], 1), np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])], 0)
-        c2w = np.linalg.inv(w2c)
+        pose = qt2pose(q=image["qvec"], t=image["tvec"])
 
         if fix_up:
-            z_transform = np.ones((4, 4))
-            z_transform[:3, :3] = up_R
-            z_transform[:3, 3] = up_t
-
-            c2w = z_transform @ Rt_to_pose(rotx_np(-np.pi / 2)[0]) @ c2w  # world z up
-            Rt = np.linalg.inv(c2w)
-            reconstruction.images[image_id]["tvec"] = Rt[:3, 3]
-            reconstruction.images[image_id]["qvec"] = -rotmat2qvec(Rt[:3, :3])
+            pose = world_transform @ pose
 
         frame = Frame(
             camera=camera,
             image_path=os.path.join(reconstruction.image_dir, image["name"]),
             org_path=os.path.join(reconstruction.image_dir, image["name"]),
-            pose=c2w,
+            pose=pose,
             seq_id=image_id
         )
         frames.append(frame)
 
-    # transform points
     if fix_up:
-        for p, point in zip(xyz, reconstruction.points):
-            reconstruction.points[point]["xyz"] = p
+        reconstruction.world_transform(R=world_transform[:3, :3], t=world_transform[:3, 3])
 
     return NuwaDB(
         source="colmap",
@@ -167,7 +155,7 @@ def from_polycam(
         ])
         pose = convert_camera_pose(pose, "blender", "cv")
         image_path = os.path.abspath(os.path.join(seq_dir, f"{dir_prefix}images/{uids[i]}.jpg"))
-        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
+        pose = rt2pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
 
         if should_be_portrait:
             if w >= h:
@@ -191,7 +179,7 @@ def from_polycam(
             if should_be_portrait:
                 image = image.rotate(270, expand=True)
                 pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-                pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
+                pose = rt2pose(rotz_np(np.pi)[0]) @ pose  # fix up
 
             image_path = os.path.abspath(os.path.join(new_image_dir, f"{uids[i]}.jpg"))
             image.save(image_path)
@@ -205,7 +193,7 @@ def from_polycam(
                     image = image.rotate(270, expand=True)
                     image.save(new_image_path)
                     pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-                    pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
+                    pose = rt2pose(rotz_np(np.pi)[0]) @ pose  # fix up
                 else:
                     shutil.copy2(image_path, new_image_path)
 
@@ -277,7 +265,7 @@ def from_3dscannerapp(
 
         intrinsics = camera_json["intrinsics"]
         image_path = os.path.abspath(os.path.join(file_dir, jpg_name))
-        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose
+        pose = rt2pose(rotx_np(np.pi / 2)[0]) @ pose
 
         if new_image_dir is not None:
             new_image_path = os.path.join(new_image_dir, os.path.basename(image_path))
@@ -373,12 +361,12 @@ def from_dear(
 
         fx, fy, cx, cy = intrinsic[0, 0], intrinsic[1, 1], intrinsic[0, 2], intrinsic[1, 2]
         pose = convert_camera_pose(transform, "blender", "cv")
-        pose = Rt_to_pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
+        pose = rt2pose(rotx_np(np.pi / 2)[0]) @ pose  # fix up
 
         image = Image.open(frame_path)
         if should_be_portrait:
             pose, fx, fy, cx, cy, w, h = get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h)
-            pose = Rt_to_pose(rotz_np(np.pi)[0]) @ pose  # fix up
+            pose = rt2pose(rotz_np(np.pi)[0]) @ pose  # fix up
 
         camera = PinholeCamera(w, h, fx, fy, cx, cy)
         image_path = os.path.abspath(frame_path)

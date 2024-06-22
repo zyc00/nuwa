@@ -2,13 +2,12 @@ import os
 from typing import Dict, List
 
 import numpy as np
-import plyfile
 from copy import deepcopy as copy
 
 import nuwa
 from nuwa.data.frame import Frame
 from nuwa.utils.colmap_utils import colmap_convert_model
-from nuwa.utils.pose_utils import rotmat2qvec
+from nuwa.utils.pose_utils import pose2qt, qt2pose, rt2pose
 from nuwa.utils.utils_3d import save_ply
 
 
@@ -86,15 +85,15 @@ class Reconstruction:
             else:
                 assert image_dir == os.path.dirname(frame.image_path), "All images should be in the same directory"
 
-            Rt = np.linalg.inv(frame.pose)
+            q, t = pose2qt(frame.pose)
 
             images[i] = {
                 "camera_id": f2c[i],
                 "name": os.path.basename(frame.image_path),
                 "xys": np.zeros((0, 2), dtype=float),
                 "point_ids": np.array([], dtype=int),
-                "tvec": Rt[:3, 3],
-                "qvec": -rotmat2qvec(Rt[:3, :3]),
+                "tvec": t,
+                "qvec": q
             }
 
         image_dir = os.path.abspath(image_dir)
@@ -104,10 +103,10 @@ class Reconstruction:
 
     def update_poses_from_frames(self, frames: List[Frame]):
         for i, frame in enumerate(frames):
-            Rt = np.linalg.inv(frame.pose)
-            assert os.path.basename(frame.org_path) == self.images[i]["name"], frame.image_path + ' ' + self.images[i]["name"]
-            self.images[i]["tvec"] = Rt[:3, 3]
-            self.images[i]["qvec"] = -rotmat2qvec(Rt[:3, :3])
+            assert os.path.basename(frame.org_path) == self.images[i]["name"]
+            q, t = pose2qt(frame.pose)
+            self.images[i]["tvec"] = t
+            self.images[i]["qvec"] = q
 
     def __repr__(self):
         return {
@@ -247,7 +246,9 @@ class Reconstruction:
 
     def world_translate(self, translation):
         for image in self.images.values():
-            image['tvec'] += translation
+            pose = qt2pose(q=image['qvec'], t=image['tvec'])
+            pose[:3, 3] += translation
+            _, image['tvec'] = pose2qt(pose)
 
         for point in self.points.values():
             point['xyz'] += translation
@@ -258,6 +259,15 @@ class Reconstruction:
 
         for point in self.points.values():
             point['xyz'] *= scale
+
+    def world_transform(self, R, t):
+        for image in self.images.values():
+            pose = qt2pose(q=image['qvec'], t=image['tvec'])
+            pose = rt2pose(R, t) @ pose
+            image['qvec'], image['tvec'] = pose2qt(pose)
+
+        for point in self.points.values():
+            point['xyz'] = point['xyz'] @ R.T + t
 
     def _dump_cameras(self, output_folder):
         cameras_path = os.path.join(output_folder, 'cameras.txt')

@@ -103,6 +103,84 @@ def get_rot90_camera_matrices(pose, fx, fy, cx, cy, w, h):
     return new_pose_matrix, nfx, nfy, ncx, ncy, h, w
 
 
+def qt2pose(q, t):
+    q = np.array(q).reshape(-1)
+    t = np.array(t).reshape(-1)
+    return np.linalg.inv(rt2pose(qvec2rotmat(-q), t))
+
+
+def pose2qt(pose):
+    rt = np.linalg.inv(pose)
+    return -rotmat2qvec(rt[:3, :3]), rt[:3, 3]
+
+
+def rt2pose(R, t=np.zeros(3)):
+    pose = np.eye(4)
+    pose[:3, :3] = R
+    pose[:3, 3] = t
+    return pose
+
+
+def rotx_np(a):
+    """
+    :param a: np.ndarray of (N, 1) or (N), or float, or int
+              angle
+    :return: np.ndarray of (N, 3, 3)
+             rotation matrix
+    """
+    if isinstance(a, (int, float)):
+        a = np.array([a])
+    a = a.astype(float).reshape((-1, 1))
+    ones = np.ones_like(a)
+    zeros = np.zeros_like(a)
+    c = np.cos(a)
+    s = np.sin(a)
+    rot = np.stack([ones, zeros, zeros,
+                    zeros, c, -s,
+                    zeros, s, c])
+    return rot.reshape((-1, 3, 3))
+
+
+def roty_np(a):
+    """
+    :param a: np.ndarray of (N, 1) or (N), or float, or int
+              angle
+    :return: np.ndarray of (N, 3, 3)
+             rotation matrix
+    """
+    if isinstance(a, (int, float)):
+        a = np.array([a])
+    a = a.astype(float).reshape((-1, 1))
+    ones = np.ones_like(a)
+    zeros = np.zeros_like(a)
+    c = np.cos(a)
+    s = np.sin(a)
+    rot = np.stack([c, zeros, s,
+                    zeros, ones, zeros,
+                    -s, zeros, c])
+    return rot.reshape((-1, 3, 3))
+
+
+def rotz_np(a):
+    """
+    :param a: np.ndarray of (N, 1) or (N), or float, or int
+              angle
+    :return: np.ndarray of (N, 3, 3)
+             rotation matrix
+    """
+    if isinstance(a, (int, float)):
+        a = np.array([a])
+    a = a.astype(float).reshape((-1, 1))
+    ones = np.ones_like(a)
+    zeros = np.zeros_like(a)
+    c = np.cos(a)
+    s = np.sin(a)
+    rot = np.stack([c, -s, zeros,
+                    s, c, zeros,
+                    zeros, zeros, ones])
+    return rot.reshape((-1, 3, 3))
+
+
 if __name__ == '__main__':
     import unittest
 

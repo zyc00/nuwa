@@ -3,7 +3,6 @@ import numpy as np
 
 import nuwa
 from nuwa.utils.utils_3d import read_ply, voxelized_sampling, save_ply
-from nuwa.utils.utils_3d import rotx_np, Rt_to_pose
 
 
 def find_plane(points, thresh=0.05):
@@ -30,16 +29,19 @@ def find_and_colorize(points, thresh=0.05):
     return plane, points, colors
 
 
-def find_up(xyz, grid_size=0.1, thresh=0.09):
+def find_up(xyz, grid_size=0.1, thresh=0.09, z_thresh=0.2):
     """
     Return the world up location of the given point cloud. This function assumes the scene is almost upright (+z).
 
     :param xyz: [n, 3] array of 3D points
     :param grid_size: size of voxels for sampling
     :param thresh: threshold for plane fitting
+    :param z_thresh: threshold for filtering points below the floor
     :return: the up direction (normal of the floor), the center of the floor
     """
-    points = xyz[xyz[:, 2] < 0.5]  # Filter points below 0.5 in z-axis
+    nuwa.get_logger().info("find_up - finding up direction...")
+
+    points = xyz[xyz[:, 2] < z_thresh]
 
     points = voxelized_sampling(points, grid_size=grid_size).astype(float)
     floor, inlier_idx = find_plane(points, thresh=thresh)  # floor: Ax+By+Cy+D=0
@@ -50,12 +52,12 @@ def find_up(xyz, grid_size=0.1, thresh=0.09):
 
     center = np.mean(points[inlier_idx], axis=0)
 
-    nuwa.get_logger().info(f"find_up: {up_direction=}, {center=}")
+    nuwa.get_logger().info(f"find_up - {up_direction=}, {center=}")
 
     return up_direction, center
 
 
-def get_upright_transformation(xyz, grid_size=0.06, thresh=0.06):
+def get_upright_transformation(xyz, grid_size=0.06, thresh=0.06, z_thresh=0.2):
     """
     Computes the rotation and translation to align the input points to
     an upright world coordinate system, where floor is z=0.
@@ -63,10 +65,11 @@ def get_upright_transformation(xyz, grid_size=0.06, thresh=0.06):
     :param xyz: [n, 3] array of 3D points
     :param grid_size: size of voxels for sampling
     :param thresh: threshold for plane fitting
+    :param z_thresh: threshold for filtering points below the floor
     :return: R (rotation matrix), t (translation vector)
     """
     # Find the up direction
-    up_direction, center = find_up(xyz, grid_size, thresh)
+    up_direction, center = find_up(xyz, grid_size, thresh, z_thresh)
 
     # Compute the rotation matrix
     z_axis = np.array([0, 0, 1])

@@ -55,7 +55,13 @@ class NuwaDB:
             nuwa.get_logger().info(f"avg up {tuple(up)}")
 
         if self.source == "colmap":
-            return up
+            # return up
+            if up[2] > 0.99:
+                return np.array([0., 0., 1.])
+            else:
+                nuwa.get_logger().warning(f"colmap source detected, but up is not close to +z, "
+                                          f"please check if the extrinsics are correct.")
+                return up
         elif self.source == "arkit":
             return np.array([0., 0., 1.])
         elif self.source == "polycam":
@@ -287,7 +293,7 @@ class NuwaDB:
         self.dump(tmp_json)
 
         nuwa.get_logger().info(f"ingp - "
-                               f"please use GUI to perform extrinsic optimization and dump pose now (check no quat)`")
+                               f"please use GUI to perform extrinsic optimization and dump pose now (check no quat)")
         do_system((ingp_binary, tmp_json, "--no-train"))
 
         refined_json = os.path.join(tmp_dump, "nuwa_db_base_extrinsics.json")
@@ -306,14 +312,14 @@ class NuwaDB:
             err = f.pose @ np.linalg.inv(pose)
             err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
             err_t = np.linalg.norm(err[:3, 3])
-            nuwa.get_logger().debug(f"ingp - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.5f}")
+            nuwa.get_logger().debug(f"ingp - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.4f}")
 
             err_r_max = max(err_r_max, err_r)
             err_t_max = max(err_t_max, err_t)
 
             f.pose = pose
 
-        nuwa.get_logger().info(f"ingp - finetune results: {err_r_max=:.3f}, {err_t_max=:.5f}")
+        nuwa.get_logger().info(f"ingp - finetune results: {err_r_max=:.3f}, {err_t_max=:.4f}")
         self.colmap_reconstruction.update_poses_from_frames(self.frames)
         shutil.rmtree(tmp_dump)
 

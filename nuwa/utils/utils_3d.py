@@ -1,5 +1,3 @@
-from typing import Iterable
-
 import numpy as np
 
 
@@ -38,73 +36,6 @@ def canonical_to_camera(pts, pose):
 
 
 transform_points = canonical_to_camera
-
-
-def rotx_np(a):
-    """
-    :param a: np.ndarray of (N, 1) or (N), or float, or int
-              angle
-    :return: np.ndarray of (N, 3, 3)
-             rotation matrix
-    """
-    if isinstance(a, (int, float)):
-        a = np.array([a])
-    a = a.astype(float).reshape((-1, 1))
-    ones = np.ones_like(a)
-    zeros = np.zeros_like(a)
-    c = np.cos(a)
-    s = np.sin(a)
-    rot = np.stack([ones, zeros, zeros,
-                    zeros, c, -s,
-                    zeros, s, c])
-    return rot.reshape((-1, 3, 3))
-
-
-def roty_np(a):
-    """
-    :param a: np.ndarray of (N, 1) or (N), or float, or int
-              angle
-    :return: np.ndarray of (N, 3, 3)
-             rotation matrix
-    """
-    if isinstance(a, (int, float)):
-        a = np.array([a])
-    a = a.astype(float).reshape((-1, 1))
-    ones = np.ones_like(a)
-    zeros = np.zeros_like(a)
-    c = np.cos(a)
-    s = np.sin(a)
-    rot = np.stack([c, zeros, s,
-                    zeros, ones, zeros,
-                    -s, zeros, c])
-    return rot.reshape((-1, 3, 3))
-
-
-def rotz_np(a):
-    """
-    :param a: np.ndarray of (N, 1) or (N), or float, or int
-              angle
-    :return: np.ndarray of (N, 3, 3)
-             rotation matrix
-    """
-    if isinstance(a, (int, float)):
-        a = np.array([a])
-    a = a.astype(float).reshape((-1, 1))
-    ones = np.ones_like(a)
-    zeros = np.zeros_like(a)
-    c = np.cos(a)
-    s = np.sin(a)
-    rot = np.stack([c, -s, zeros,
-                    s, c, zeros,
-                    zeros, zeros, ones])
-    return rot.reshape((-1, 3, 3))
-
-
-def Rt_to_pose(R, t=np.zeros(3)):
-    pose = np.eye(4)
-    pose[:3, :3] = R
-    pose[:3, 3] = t
-    return pose
 
 
 def rect_to_img(K, pts_rect):
