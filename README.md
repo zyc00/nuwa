@@ -16,7 +16,7 @@ pip install git+https://github.com/jetd1/nuwa.git
 # (optional) if you want to use segmentation for object oriented scenes (--object)
 pip install rembg>=2.0.57 torch>=2.0.0 torchvision>=0.16.0 git+https://github.com/facebookresearch/segment-anything.git
 
-# (optional) if you want to use `nuwa-mesh` to generate mesh from point clouds
+# (optional) if you want to use `nuwat gs2mesh` to generate mesh
 pip install open3d>=0.18.0
 ```
 
@@ -50,7 +50,7 @@ nuwat gs2mesh -i A.ply -o B.ply
 
 # (nuwat is an alias for nuwa-tools)
 # To downsample the images in a db:
-nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half res), or `-r 1000` (for 1000px max)
+nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half) or `-r 1000` (for max 1000px)
 ```
 
 🐍 Python

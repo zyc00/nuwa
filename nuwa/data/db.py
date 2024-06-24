@@ -30,7 +30,7 @@ class NuwaDB:
     def __init__(self, source="", frames=None, colmap_reconstruction=None, scale_denorm=None, z_up=None):
         self.source = source
         if self.source == "polycam":
-            nuwa.get_logger().warning("Polycam data source is deprecated, please use 'arkit' instead.")
+            nuwa.get_logger().warning("'polycam' source tag is deprecated, please use 'arkit' instead.")
         else:
             assert self.source in ["arkit", "colmap"], f"Unknown data source {self.source}."
 
@@ -164,7 +164,7 @@ class NuwaDB:
 
         # TODO: fix this
         if self.colmap_reconstruction is not None and self.source == "colmap":
-            nuwa.get_logger().warning(f"in the current version, colmap reconstruction will break after masking")
+            nuwa.get_logger().warning(f"nseg - in the current version, colmap reconstruction will break after masking")
 
         os.makedirs(mask_save_dir, exist_ok=True)
         os.makedirs(masked_image_save_dir, exist_ok=True)
@@ -174,6 +174,7 @@ class NuwaDB:
 
         masks = []
         images = []
+        nuwa.get_logger().info(f"nseg - starting to generate masks for {len(self.frames)} frames...")
         for i, frame in tqdm.tqdm(enumerate(self.frames), desc='masking'):
             img = Image.open(frame.image_path)
 
@@ -207,6 +208,7 @@ class NuwaDB:
                     maxcomp = np.argmax(stats[1:, 4]) + 1
                     mask = (labels == maxcomp)
                 except ValueError:
+                    nuwa.get_logger().warning(f"nseg - fail to process {frame.image_path}, no object found...")
                     mask = np.ones_like(mask)
 
             images.append(np.array(img))
@@ -228,6 +230,7 @@ class NuwaDB:
                 # TODO: save org_mask
 
         if adjust_cameras:
+            nuwa.get_logger().info(f"nseg - normalizing the scene...")
             self.normalize_cameras(positive_z=True, scale_factor=1.0)
             masks = np.array(masks)
             ks = np.array([f.camera.intrinsic_matrix for f in self.frames])
@@ -294,12 +297,14 @@ class NuwaDB:
         else:
             self.scale_denorm *= scale
 
+        nuwa.get_logger().info(f"db norm - normalized the scene, org_ctr={tuple(offset)}, org_scale={1 / scale}")
+
     def finetune_pose(self, ingp_binary="instant-ngp"):
         tmp_dump = tempfile.mkdtemp()
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        nuwa.get_logger().info(f"ingp - "
+        nuwa.get_logger().info(f"ingp ft - "
                                f"please use GUI to perform extrinsic optimization and dump pose now (check no quat)")
         do_system((ingp_binary, tmp_json, "--no-train"))
 
@@ -319,14 +324,14 @@ class NuwaDB:
             err = f.pose @ np.linalg.inv(pose)
             err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
             err_t = np.linalg.norm(err[:3, 3])
-            nuwa.get_logger().debug(f"ingp - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.4f}")
+            nuwa.get_logger().debug(f"ingp ft - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.4f}")
 
             err_r_max = max(err_r_max, err_r)
             err_t_max = max(err_t_max, err_t)
 
             f.pose = pose
 
-        nuwa.get_logger().info(f"ingp - finetune results: {err_r_max=:.3f}, {err_t_max=:.4f}")
+        nuwa.get_logger().info(f"ingp ft - finetune results: {err_r_max=:.3f}, {err_t_max=:.4f}")
         self.colmap_reconstruction.update_poses_from_frames(self.frames)
         shutil.rmtree(tmp_dump)
 

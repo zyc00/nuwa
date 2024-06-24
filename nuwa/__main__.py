@@ -275,7 +275,7 @@ def gs2mesh(args):
     try:
         import open3d as o3d
     except ImportError:
-        nuwa.get_logger().error("Open3D is not installed, please install it with `pip install open3d>=0.18.0`.")
+        nuwa.get_logger().error('nmesh - Open3D is not installed, please run `pip install "open3d>=0.18.0"`.')
     import numpy as np
     from nuwa.utils.gs_utils import load_gs_simple
 
