@@ -44,8 +44,13 @@ nuwa -h
 # To generate sparse point sets for a nuwadb:
 nuwa-tools genpoints -i NUWADB_DIR  # -o OUT_DIR (optional)
 
+# (nuwat is an alias for nuwa-tools)
 # To generate mesh from point clouds (or gaussian splats .ply):
-nuwa-tools gs2mesh -i A.ply -o B.ply
+nuwat gs2mesh -i A.ply -o B.ply
+
+# (nuwat is an alias for nuwa-tools)
+# To downsample the images in a db:
+nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half res), or `-r 1000` (for 1000px max)
 ```
 
 🐍 Python
@@ -58,9 +63,7 @@ db = nuwa.from_image_folder(img_dir)
 # db = nuwa.from_colmap(img_dir, colmap_dir)
 # db = nuwa.from_polycam(polycam_dir)
 # db = nuwa.from_3dscannerapp(3dscannerapp_dir)
-
-masks = db.calculate_object_mask(mask_save_dir, masked_image_save_dir)
-db.finetune_pose()
+# db = nuwa.from_dear(dear_dir)
 
 db.dump("db.json")
 ```
@@ -142,7 +145,7 @@ Example:
 2. Pass `--object` to indicate the scene needs normalization and segmentation.
 
 ## TODO
-- [ ] nuwa-mesh (voxelize and meshing)
+- [ ] instant-ngp c++ api call for pose fine-tuning
 - [ ] Reorganize transformations in reconstruction
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).
