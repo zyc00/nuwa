@@ -397,11 +397,17 @@ def from_dear(
 def from_nuwadb(path):
     db = json.load(open(path))
     frames = sorted([Frame.from_dict(f, root=os.path.dirname(path)) for f in db["frames"]], key=lambda x: x.image_path)
+
+    z_up = None
+    if "up" in db:
+        z_up = np.allclose(np.array(db["up"]), np.array([0, 0, 1]))
+
     return NuwaDB(
         source=db["source"],
         frames=frames,
         colmap_reconstruction=Reconstruction.from_frames(frames),
-        scale_denorm=db.get("scale_denorm", None)
+        scale_denorm=db.get("scale_denorm", None),
+        z_up=True if z_up else None
     )
 
 

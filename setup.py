@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='nuwa',
-    version='0.0.85',
+    version='0.0.90',
     description='',
     author='Xiaoshuai Jet Zhang',
     author_email='jetgabr@gmail.com',
@@ -30,8 +30,8 @@ setup(
     entry_points=dict(
         console_scripts=[
             "nuwa=nuwa.__main__:main",
-            "nuwa-colmap=nuwa.__main__:colmap",
-            "nuwa-mesh=nuwa.__main__:mesh",
+            "nuwat=nuwa.__main__:tools",
+            "nuwa-tools=nuwa.__main__:tools",
         ]
     )
 )

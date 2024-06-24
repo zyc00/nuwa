@@ -42,10 +42,10 @@ nuwa -d dear.zip -o OUT_DIR  # --portrait --object --finetune-pose (optional)
 nuwa -h
 
 # To generate sparse point sets for a nuwadb:
-nuwa-colmap -i NUWADB_DIR  # -o OUT_DIR (optional)
+nuwa-tools genpoints -i NUWADB_DIR  # -o OUT_DIR (optional)
 
 # To generate mesh from point clouds (or gaussian splats .ply):
-nuwa-mesh -i A.ply -o B.ply
+nuwa-tools gs2mesh -i A.ply -o B.ply
 ```
 
 🐍 Python

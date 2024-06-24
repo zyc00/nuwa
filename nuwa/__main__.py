@@ -232,38 +232,7 @@ def main():
         f.write(" ".join(sys.argv))
 
 
-def colmap():
-    def get_args():
-        parser = argparse.ArgumentParser(description="nuwa-colmap: generate 3D points with colmap for nuwadb")
-        parser.add_argument("--input-dir", "-i", type=str, default="",
-                            help="Path to the nuwadb")
-
-        parser.add_argument("--out-dir", "-o", type=str, default=None,
-                            help="Path to the output dir")
-
-        parser.add_argument("--colmap-binary", type=str, default="colmap",
-                            help="Path to the colmap binary")
-        parser.add_argument("--matcher", type=str, default="exhaustive",
-                            help="Feature matcher, omitted for video inputs")
-        parser.add_argument("--no-loop-detection", action="store_true",
-                            help="Disable loop detection in colmap")
-
-        parser.add_argument("--verbose", action="store_true",
-                            help="Verbose mode (deprecated)")
-        parser.add_argument("--log-level", "-l", type=str, default="INFO",
-                            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                            help="Log level (DEBUG/INFO/WARNING/ERROR)")
-
-        return parser.parse_args()
-
-    args = get_args()
-
-    if args.verbose:
-        nuwa.set_log_level(nuwa.logging.DEBUG)
-        nuwa.get_logger().warning("`--verbose` flag is deprecated, use `-l DEBUG` instead")
-    else:
-        nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
-
+def genpoints(args):
     nuwa_dir = args.input_dir
     out_dir = args.out_dir
     colmap_binary = args.colmap_binary
@@ -302,30 +271,7 @@ def colmap():
             f.write(" ".join(sys.argv))
 
 
-def mesh():
-    def get_args():
-        parser = argparse.ArgumentParser(description="nuwa-mesh: generate mesh from ply point clouds")
-        parser.add_argument("--input-path", "-i", type=str, default="",
-                            help="Path to the point cloud ply")
-        parser.add_argument("--out-path", "-o", type=str, default=None,
-                            help="Path to the output mesh")
-
-        parser.add_argument("--poisson-depth", "-d", type=int, default=11,
-                            help="Poisson depth")
-        parser.add_argument("--target-faces", "-f", type=int, default=16,
-                            help="Target number of faces in the output mesh."
-                                 "If < 100, it is interpreted as the reduce factor of the poisson mesh, "
-                                 "else as the target number of faces.")
-
-        parser.add_argument("--log-level", "-l", type=str, default="INFO",
-                            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                            help="Log level (DEBUG/INFO/WARNING/ERROR)")
-
-        return parser.parse_args()
-
-    args = get_args()
-    nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
-
+def gs2mesh(args):
     try:
         import open3d as o3d
     except ImportError:
@@ -362,6 +308,80 @@ def mesh():
         write_triangle_uvs=True,
         print_progress=False
     )
+
+
+def downsample(args):
+    nuwa_dir = args.input_path
+    out_dir = args.output_path
+    resolution = args.resolution
+
+    if os.path.exists(out_dir):
+        nuwa.get_logger().warning("Output directory exists, overwriting...")
+
+    os.makedirs(out_dir, exist_ok=True)
+    new_image_dir = os.path.join(out_dir, "images")
+    os.makedirs(new_image_dir, exist_ok=True)
+    new_mask_dir = os.path.join(out_dir, "masks")
+    if os.path.exists(os.path.join(nuwa_dir, "masks")):
+        os.makedirs(new_mask_dir, exist_ok=True)
+
+    db = from_nuwadb(os.path.join(nuwa_dir, "nuwa_db.json"))
+    db.downsample_images(resolution, new_image_dir=new_image_dir, new_mask_dir=new_mask_dir)
+
+    db.dump(
+        os.path.join(out_dir, "nuwa_db.json"),
+        copy_images_to=None,
+        copy_masks_to=None,
+        dump_reconstruction_to=os.path.join(out_dir, "sparse/0")
+    )
+
+
+def tools():
+    parser = argparse.ArgumentParser(description="nuwa-tools: nuwadb toolbox")
+    parser.add_argument("--log-level", "-l", type=str, default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                        help="Log level (DEBUG/INFO/WARNING/ERROR)")
+    subparsers = parser.add_subparsers()
+
+    gs2mesh_parser = subparsers.add_parser("gs2mesh", help="Generate mesh from input point cloud / 3dgs ply.")
+    gs2mesh_parser.add_argument("--input-path", "-i", type=str, default="",
+                                help="Path to the point cloud ply")
+    gs2mesh_parser.add_argument("--out-path", "-o", type=str, default=None,
+                                help="Path to the output mesh")
+    gs2mesh_parser.add_argument("--poisson-depth", "-d", type=int, default=11, help="Poisson depth")
+    gs2mesh_parser.add_argument("--target-faces", "-f", type=int, default=16,
+                                help="Target number of faces in the output mesh."
+                                     "If < 100, it is interpreted as the reduce factor of the poisson mesh, "
+                                     "else as the target number of faces.")
+    gs2mesh_parser.set_defaults(func=gs2mesh)
+
+    genpoints_parser = subparsers.add_parser("genpoints", description="Generate 3D points with colmap for nuwadb")
+    genpoints_parser.add_argument("--input-dir", "-i", type=str, default="",
+                                  help="Path to the nuwadb")
+    genpoints_parser.add_argument("--out-dir", "-o", type=str, default=None,
+                                  help="Path to the output dir")
+    genpoints_parser.add_argument("--colmap-binary", type=str, default="colmap",
+                                  help="Path to the colmap binary")
+    genpoints_parser.add_argument("--matcher", "-m", type=str, default="exhaustive",
+                                  help="Feature matcher, omitted for video inputs")
+    genpoints_parser.add_argument("--no-loop-detection", action="store_true",
+                                  help="Disable loop detection in colmap")
+    genpoints_parser.set_defaults(func=genpoints)
+
+    downsample_parser = subparsers.add_parser("downsample", help="Downsample the images")
+    downsample_parser.add_argument("--input-path", "-i", type=str, required=True,
+                                   help="Path to the input nuwadb")
+    downsample_parser.add_argument("--output-path", "-o", type=str, required=True,
+                                   help="Path to the output nuwadb")
+    downsample_parser.add_argument("--resolution", "-r", type=int, default=2,
+                                   help="If value <= 64, it is interpreted as the resolution factor, "
+                                        "else as the target resolution (longer side)")
+    downsample_parser.set_defaults(func=downsample)
+
+    args = parser.parse_args()
+    nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
+
+    args.func(args)
 
 
 # if __name__ == "__main__":

@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import tqdm
 from PIL import Image
+from PIL.Image import Resampling
 
 import nuwa
 from nuwa.data.colmap import Reconstruction
@@ -490,3 +491,51 @@ class NuwaDB:
                    f"--Mapper.fix_existing_images=0"))
 
         self.colmap_reconstruction = Reconstruction.from_colmap(colmap_out_dir)
+
+    def downsample_images(self, resolution, new_image_dir, new_mask_dir=None):
+        """
+        Downsample images to a specific resolution
+        If resolution <= 64, it will be treated as a scale factor,
+        else it is the longer side of the downsampled image
+        """
+        os.makedirs(new_image_dir, exist_ok=True)
+
+        for f in tqdm.tqdm(self.frames, desc="Downsampling images"):
+            img = Image.open(f.image_path)
+            w, h = img.size
+
+            if resolution <= 64:
+                w = int(w / resolution)
+                h = int(h / resolution)
+                reduce_factor = resolution
+            else:
+                if w > h:
+                    h = int(resolution * h / w)
+                    w = resolution
+                else:
+                    w = int(resolution * w / h)
+                    h = resolution
+                reduce_factor = w / img.size[0]
+
+            nuwa.get_logger().debug(f"downsample - {reduce_factor=}")
+
+            img = img.resize((w, h), Resampling.LANCZOS)
+            img.save(os.path.join(new_image_dir, os.path.basename(f.image_path)))
+            f.image_path = os.path.join(new_image_dir, os.path.basename(f.image_path))
+
+            if f.mask_path:
+                mask = Image.open(f.mask_path)
+                mask = mask.resize((w, h), Resampling.NEAREST)
+                mask.save(os.path.join(new_mask_dir, os.path.basename(f.mask_path)))
+                f.mask_path = os.path.join(new_mask_dir, os.path.basename(f.mask_path))
+
+            f.camera.w = w
+            f.camera.h = h
+            f.camera.fx *= reduce_factor
+            f.camera.fy *= reduce_factor
+            f.camera.cx *= reduce_factor
+            f.camera.cy *= reduce_factor
+
+        if self.colmap_reconstruction is not None:
+            nuwa.get_logger().warning("downsample - 'image' and 'camera' db in colmap reconstruction "
+                                      "will be broken after downsample")
