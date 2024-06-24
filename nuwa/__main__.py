@@ -1,13 +1,14 @@
+import os
 import sys
+import argparse
 import tempfile
 
 import nuwa
-from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_colmap, from_dear
+from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_dear
 
 
 def main():
     def get_args():
-        import argparse
         parser = argparse.ArgumentParser(description="Nuwa: 3D Reconstruction Pipeline")
         parser.add_argument("--video-path", "-v", type=str, default="",
                             help="Path to the video file")
@@ -72,8 +73,6 @@ def main():
 
         return parser.parse_args()
 
-    import os
-    import sys
     args = get_args()
 
     if args.verbose:
@@ -235,7 +234,6 @@ def main():
 
 def colmap():
     def get_args():
-        import argparse
         parser = argparse.ArgumentParser(description="nuwa-colmap: generate 3D points with colmap for nuwadb")
         parser.add_argument("--input-dir", "-i", type=str, default="",
                             help="Path to the nuwadb")
@@ -258,7 +256,6 @@ def colmap():
 
         return parser.parse_args()
 
-    import os
     args = get_args()
 
     if args.verbose:
@@ -305,5 +302,67 @@ def colmap():
             f.write(" ".join(sys.argv))
 
 
-if __name__ == "__main__":
-    main()
+def mesh():
+    def get_args():
+        parser = argparse.ArgumentParser(description="nuwa-mesh: generate mesh from ply point clouds")
+        parser.add_argument("--input-path", "-i", type=str, default="",
+                            help="Path to the point cloud ply")
+        parser.add_argument("--out-path", "-o", type=str, default=None,
+                            help="Path to the output mesh")
+
+        parser.add_argument("--poisson-depth", "-d", type=int, default=11,
+                            help="Poisson depth")
+        parser.add_argument("--target-faces", "-f", type=int, default=16,
+                            help="Target number of faces in the output mesh."
+                                 "If < 100, it is interpreted as the reduce factor of the poisson mesh, "
+                                 "else as the target number of faces.")
+
+        parser.add_argument("--log-level", "-l", type=str, default="INFO",
+                            choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                            help="Log level (DEBUG/INFO/WARNING/ERROR)")
+
+        return parser.parse_args()
+
+    args = get_args()
+    nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
+
+    try:
+        import open3d as o3d
+    except ImportError:
+        nuwa.get_logger().error("Open3D is not installed, please install it with `pip install open3d>=0.18.0`.")
+    import numpy as np
+    from nuwa.utils.gs_utils import load_gs_simple
+
+    gs = load_gs_simple(args.input_path)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(gs['xyz'])
+    pcd.colors = o3d.utility.Vector3dVector(gs['color'])
+    nuwa.get_logger().info(f"nmesh - Loaded point cloud from {args.input_path} with {len(pcd.points)} points.")
+
+    pcd.estimate_normals()
+    pcd.orient_normals_towards_camera_location(np.array([0, 0, 1.5]))
+
+    mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=args.poisson_depth)
+    nuwa.get_logger().info(f"nmesh - Poisson generates a mesh with {len(mesh.triangles)} faces.")
+
+    n_faces = args.target_faces
+    if n_faces < 100:
+        n_faces = len(mesh.triangles) // n_faces
+    mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=n_faces)
+    nuwa.get_logger().info(f"nmesh - Mesh has {len(mesh.triangles)} faces after simplification.")
+
+    nuwa.get_logger().info(f"nmesh - Writing mesh to {args.out_path}.")
+    o3d.io.write_triangle_mesh(
+        args.out_path,
+        mesh,
+        write_ascii=False,
+        compressed=True,
+        write_vertex_normals=True,
+        write_vertex_colors=True,
+        write_triangle_uvs=True,
+        print_progress=False
+    )
+
+
+# if __name__ == "__main__":
+#     main()

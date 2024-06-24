@@ -15,6 +15,9 @@ pip install git+https://github.com/jetd1/nuwa.git
 
 # (optional) if you want to use segmentation for object oriented scenes (--object)
 pip install rembg>=2.0.57 torch>=2.0.0 torchvision>=0.16.0 git+https://github.com/facebookresearch/segment-anything.git
+
+# (optional) if you want to use `nuwa-mesh` to generate mesh from point clouds
+pip install open3d>=0.18.0
 ```
 
 🧑‍💻 CLI
@@ -37,6 +40,12 @@ nuwa -d dear.zip -o OUT_DIR  # --portrait --object --finetune-pose (optional)
 
 # To view all options:
 nuwa -h
+
+# To generate sparse point sets for a nuwadb:
+nuwa-colmap -i NUWADB_DIR  # -o OUT_DIR (optional)
+
+# To generate mesh from point clouds (or gaussian splats .ply):
+nuwa-mesh -i A.ply -o B.ply
 ```
 
 🐍 Python
@@ -133,6 +142,7 @@ Example:
 2. Pass `--object` to indicate the scene needs normalization and segmentation.
 
 ## TODO
+- [ ] nuwa-mesh (voxelize and meshing)
 - [ ] Reorganize transformations in reconstruction
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).

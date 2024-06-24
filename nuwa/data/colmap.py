@@ -232,7 +232,8 @@ class Reconstruction:
             colors = np.array([point['rgb'] for point in self.points.values()])
             points = np.hstack([points, colors])
 
-            save_ply(points, path, write_text=write_text)
+            if len(points) > 0:
+                save_ply(points, path, write_text=write_text)
 
         elif path.endswith('.xyz'):
             with open(path, 'w') as file:

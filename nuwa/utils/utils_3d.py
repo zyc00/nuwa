@@ -124,3 +124,28 @@ def voxelized_sampling(xyz, grid_size=0.1, voxelize_n=3):
     voxel_grid_center[voxel_grid > 0] /= voxel_grid[voxel_grid > 0][..., None]
 
     return voxel_grid_center[voxel_grid >= voxelize_n]
+
+
+def voxelized_sampling_with_color(xyz, color, grid_size=0.1, voxelize_n=3):
+    min_bounds = np.min(xyz, axis=0)
+    max_bounds = np.max(xyz, axis=0)
+
+    voxel_dims = np.ceil((max_bounds - min_bounds) / grid_size).astype(int)
+
+    voxel_grid = np.zeros(voxel_dims, dtype=np.uint16)
+    voxel_grid_center = np.zeros((*voxel_dims, 3), dtype=np.half)
+    voxel_indices = ((xyz - min_bounds) / grid_size).astype(int)
+    voxel_color = np.zeros((*voxel_dims, 3), dtype=np.half)
+
+    for i, idx in enumerate(voxel_indices):
+        voxel_grid[tuple(idx)] += 1
+        voxel_grid_center[tuple(idx)] += xyz[i]
+        voxel_color[tuple(idx)] += color[i]
+
+    voxel_grid_center[voxel_grid > 0] /= voxel_grid[voxel_grid > 0][..., None]
+    voxel_color[voxel_grid > 0] /= voxel_grid[voxel_grid > 0][..., None]
+
+    center = voxel_grid_center[voxel_grid >= voxelize_n]
+    color = voxel_color[voxel_grid >= voxelize_n] if color is not None else None
+
+    return center, color
