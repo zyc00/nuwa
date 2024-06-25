@@ -2,12 +2,13 @@
 
 import os
 import os.path as osp
+from typing import List
 
 import cv2
 from PIL.Image import Resampling
 
 import nuwa
-from nuwa.utils import utils_3d
+from nuwa.utils import utils_3d, raft_api
 
 try:
     import torch
@@ -22,6 +23,7 @@ except ImportError:
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+import tqdm
 
 
 class RembgHelper:
@@ -312,3 +314,57 @@ class SAMAPI:
             plt.imshow(vis_mask(rgb, mask.astype(np.uint8), [0, 255, 0]))
             plt.show()
         return mask
+
+
+def segment_fg(
+        images: List[Image.Image],
+        use_flow=True,
+        sam_ckpt_path=None,
+        reduce_factor=2,
+        shrink=0.02,
+):
+    new_images = []
+    masks = []
+
+    nuwa.get_logger().info(f"nseg - starting to generate masks for {len(images)} frames, {use_flow=}")
+    for i in tqdm.trange(len(images), desc='masking'):
+        img = images[i]
+
+        if (not use_flow) or i == 0:
+            _, rembg_mask = segment_img(img)
+            _, mask = sam(img, rembg_mask)
+        else:
+            flow_rgb_img0 = images[i - 1].reduce(reduce_factor)
+            flow_rgb_img1 = img.reduce(reduce_factor)
+            flow = raft_api.raft_optical_flow_api(flow_rgb_img0, flow_rgb_img1).cpu().numpy()
+
+            ref_mask = Image.fromarray(masks[i - 1].astype(np.uint8)).reduce(reduce_factor)
+            ref_mask = np.array(ref_mask) > 0
+
+            ys, xs = ref_mask.nonzero()
+            fg_pixels = np.concatenate([xs[:, None], ys[:, None]], axis=1)
+            fg_pixels = fg_pixels.astype(np.float32)
+            fg_pixels = fg_pixels + flow[ys, xs]
+            xmin, xmax = fg_pixels[:, 0].min(), fg_pixels[:, 0].max()
+            ymin, ymax = fg_pixels[:, 1].min(), fg_pixels[:, 1].max()
+            w, h = xmax - xmin, ymax - ymin
+            xmin = int(xmin - w * shrink)
+            xmax = int(xmax + w * shrink)
+            ymin = int(ymin - h * shrink)
+            ymax = int(ymax + h * shrink)
+            bbox = xmin, ymin, xmax, ymax
+            bbox = [int(x * reduce_factor) for x in bbox]
+            mask = SAMAPI.segment_api(np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path)
+            retval, labels, stats, cent = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
+            try:
+                maxcomp = np.argmax(stats[1:, 4]) + 1
+                mask = (labels == maxcomp)
+            except ValueError:
+                nuwa.get_logger().warning(f"nseg - fail to process image {i}, no object found...")
+                _, rembg_mask = segment_img(img)
+                _, mask = sam(img, rembg_mask)
+
+        new_images.append(np.array(img))
+        masks.append(mask)
+
+    return new_images, masks

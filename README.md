@@ -51,6 +51,10 @@ nuwat gs2mesh -i A.ply -o B.ply
 # (nuwat is an alias for nuwa-tools)
 # To downsample the images in a db:
 nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half) or `-r 1000` (for max 1000px)
+
+# (nuwat is an alias for nuwa-tools)
+# To segment a image folder:
+nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half) or `-r 1000` (for max 1000px)
 ```
 
 🐍 Python

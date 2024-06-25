@@ -339,6 +339,38 @@ def downsample(args):
     )
 
 
+def seg(args):
+    from PIL import Image
+
+    assert nuwa.is_seg_available(), "Segmentation is not available, please install dependencies following README."
+    from nuwa.utils.seg_utils import segment_fg
+
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+    use_flow = not args.no_flow
+    reduce_factor = args.flow_reduce_factor
+    sam_ckpt_path = args.sam_ckpt_path
+    shrink = 0.02
+
+    image_paths = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith(("jpg", "png"))])
+
+    images, masks = segment_fg(
+        [Image.open(f) for f in image_paths],
+        use_flow=use_flow,
+        sam_ckpt_path=sam_ckpt_path,
+        reduce_factor=reduce_factor,
+        shrink=shrink
+    )
+
+    os.makedirs(output_dir, exist_ok=True)
+    for (image_path, img, mask) in zip(image_paths, images, masks):
+        image_path = image_path.replace(".jpg", ".png") if image_path.endswith("jpg") else image_path
+        img = Image.fromarray(img)
+        mask = Image.fromarray(mask)
+        img.save(os.path.join(output_dir, os.path.basename(image_path)))
+        mask.save(os.path.join(output_dir, os.path.basename(image_path).replace(".png", "_mask.png")))
+
+
 def tools():
     parser = argparse.ArgumentParser(description="nuwa-tools: nuwadb toolbox")
     parser.add_argument("--log-level", "-l", type=str, default="INFO",
@@ -380,6 +412,19 @@ def tools():
                                    help="If value <= 64, it is interpreted as the resolution factor, "
                                         "else as the target resolution (longer side)")
     downsample_parser.set_defaults(func=downsample)
+
+    seg_parser = subparsers.add_parser("seg", help="Segment the foreground from the images")
+    seg_parser.add_argument("--input-dir", "-i", type=str, required=True,
+                            help="Path to the input image folder")
+    seg_parser.add_argument("--output-dir", "-o", type=str, required=True,
+                            help="Path to the output folder")
+    seg_parser.add_argument("--no-flow", "-n", action="store_true",
+                            help="Do not use flow to track the fg. Use this for non-sequential captures.")
+    seg_parser.add_argument("--flow-reduce-factor", "-r", type=int, default=2,
+                            help="Downsample factor for computing flow.")
+    seg_parser.add_argument("--sam-ckpt-path", type=str, default=None,
+                            help="Path to the custom SAM checkpoint.")
+    seg_parser.set_defaults(func=seg)
 
     args = parser.parse_args()
     nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))

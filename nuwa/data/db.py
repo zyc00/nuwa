@@ -161,8 +161,7 @@ class NuwaDB:
         :param copy_org:
         :return:
         """
-        from nuwa.utils.seg_utils import segment_img, sam, scene_carving, crop_images, SAMAPI
-        from nuwa.utils import raft_api
+        from nuwa.utils.seg_utils import scene_carving, crop_images, segment_fg
 
         # TODO: fix this
         if self.colmap_reconstruction is not None and self.source == "colmap":
@@ -173,49 +172,15 @@ class NuwaDB:
 
         mask_save_dir = os.path.abspath(mask_save_dir)
         masked_image_save_dir = os.path.abspath(masked_image_save_dir)
+        org_images = [Image.open(f.image_path) for f in self.frames]
 
-        masks = []
-        images = []
-        nuwa.get_logger().info(f"nseg - starting to generate masks for {len(self.frames)} frames, {use_flow=}")
-        for i, frame in tqdm.tqdm(enumerate(self.frames), desc='masking'):
-            img = Image.open(frame.image_path)
-
-            if (not use_flow) or i == 0:
-                _, rembg_mask = segment_img(img)
-                _, mask = sam(img, rembg_mask)
-            else:
-                flow_rgb_img0 = Image.open(self.frames[i - 1].image_path).reduce(reduce_factor)
-                flow_rgb_img1 = img.reduce(reduce_factor)
-                flow = raft_api.raft_optical_flow_api(flow_rgb_img0, flow_rgb_img1).cpu().numpy()
-
-                ref_mask = Image.fromarray(masks[i - 1].astype(np.uint8)).reduce(reduce_factor)
-                ref_mask = np.array(ref_mask) > 0
-
-                ys, xs = ref_mask.nonzero()
-                fg_pixels = np.concatenate([xs[:, None], ys[:, None]], axis=1)
-                fg_pixels = fg_pixels.astype(np.float32)
-                fg_pixels = fg_pixels + flow[ys, xs]
-                xmin, xmax = fg_pixels[:, 0].min(), fg_pixels[:, 0].max()
-                ymin, ymax = fg_pixels[:, 1].min(), fg_pixels[:, 1].max()
-                w, h = xmax - xmin, ymax - ymin
-                xmin = int(xmin - w * shrink)
-                xmax = int(xmax + w * shrink)
-                ymin = int(ymin - h * shrink)
-                ymax = int(ymax + h * shrink)
-                bbox = xmin, ymin, xmax, ymax
-                bbox = [int(x * reduce_factor) for x in bbox]
-                mask = SAMAPI.segment_api(np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path)
-                retval, labels, stats, cent = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
-                try:
-                    maxcomp = np.argmax(stats[1:, 4]) + 1
-                    mask = (labels == maxcomp)
-                except ValueError:
-                    nuwa.get_logger().warning(f"nseg - fail to process {frame.image_path}, no object found...")
-                    _, rembg_mask = segment_img(img)
-                    _, mask = sam(img, rembg_mask)
-
-            images.append(np.array(img))
-            masks.append(mask)
+        images, masks = segment_fg(
+            org_images,
+            use_flow=use_flow,
+            sam_ckpt_path=sam_ckpt_path,
+            reduce_factor=reduce_factor,
+            shrink=shrink,
+        )
 
         if copy_org:
             for i, f in enumerate(self.frames):
