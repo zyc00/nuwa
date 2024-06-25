@@ -143,6 +143,7 @@ class NuwaDB:
             reduce_factor=2,
             shrink=0.02,
             sam_ckpt_path=None,
+            use_flow=True,
             adjust_cameras=True,
             copy_org=True
     ):
@@ -155,6 +156,7 @@ class NuwaDB:
         :param reduce_factor:
         :param shrink:
         :param sam_ckpt_path:
+        :param use_flow:
         :param adjust_cameras:
         :param copy_org:
         :return:
@@ -174,11 +176,11 @@ class NuwaDB:
 
         masks = []
         images = []
-        nuwa.get_logger().info(f"nseg - starting to generate masks for {len(self.frames)} frames...")
+        nuwa.get_logger().info(f"nseg - starting to generate masks for {len(self.frames)} frames, {use_flow=}")
         for i, frame in tqdm.tqdm(enumerate(self.frames), desc='masking'):
             img = Image.open(frame.image_path)
 
-            if i == 0:
+            if (not use_flow) or i == 0:
                 _, rembg_mask = segment_img(img)
                 _, mask = sam(img, rembg_mask)
             else:
@@ -209,7 +211,8 @@ class NuwaDB:
                     mask = (labels == maxcomp)
                 except ValueError:
                     nuwa.get_logger().warning(f"nseg - fail to process {frame.image_path}, no object found...")
-                    mask = np.ones_like(mask)
+                    _, rembg_mask = segment_img(img)
+                    _, mask = sam(img, rembg_mask)
 
             images.append(np.array(img))
             masks.append(mask)

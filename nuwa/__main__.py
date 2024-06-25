@@ -62,6 +62,8 @@ def main():
 
         parser.add_argument("--object", action="store_true",
                             help="Object scene, will generate object masks and normalize the scene into (-1, 1)")
+        parser.add_argument("--no-flow", action="store_true",
+                            help="Do not use flow when segmenting images")
         parser.add_argument("--no-undistort", action="store_true",
                             help="Do not undistort images")
 
@@ -190,17 +192,18 @@ def main():
             hloc_use_pixsfm=hloc_use_pixsfm
         )
 
-    if gen_mask:
-        if args.finetune_pose:
-            db.normalize_cameras(positive_z=True, scale_factor=0.6)
-            db.finetune_pose(args.ingp_binary)
+    if args.finetune_pose:
+        db.normalize_cameras(positive_z=True, scale_factor=0.8)
+        db.finetune_pose(args.ingp_binary)
 
+    if gen_mask:
         try:
             _ = db.calculate_object_mask(
                 os.path.join(out_dir, "masks"),
                 os.path.join(out_dir, "images"),
                 adjust_cameras=True,
-                copy_org=True
+                copy_org=True,
+                use_flow=not args.no_flow
             )
 
             copy_images_to = None
