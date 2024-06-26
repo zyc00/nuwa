@@ -267,7 +267,71 @@ class NuwaDB:
 
         nuwa.get_logger().info(f"db norm - normalized the scene, org_ctr={tuple(offset)}, org_scale={1 / scale}")
 
-    def finetune_pose(self):
+    def finetune_pose(self, near=-1.0, n_steps=10000):
+        assert nuwa.is_ingp_available(), "Pose fine-tuning requires ingp, please install it following README."
+
+        tmp_dump = tempfile.mkdtemp()
+        tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
+        self.dump(tmp_json)
+
+        import pyngp as ingp
+
+        testbed = ingp.Testbed()
+        testbed.root_dir = tmp_dump
+        testbed.load_file(tmp_json)
+        # testbed.load_training_data(tmp_json)
+        testbed.nerf.optimize_extrinsics = True
+        # testbed.nerf.optimize_exposure = True
+        testbed.nerf.random_bg_color = True
+        testbed.nerf.render_with_lens_distortion = True
+        if args.near_distance >= 0.0:
+            nuwa.get_logger().info(f"ingp ft - ray {near=}")
+            testbed.nerf.training.near_distance = near
+        testbed.shall_train = True
+
+        old_training_step = 0
+        tqdm_last_update = 0
+        with tqdm(desc="Training", total=n_steps, unit="steps") as t:
+            while testbed.frame():
+                if testbed.training_step >= n_steps:
+                    break
+
+                if testbed.training_step < old_training_step or old_training_step == 0:
+                    old_training_step = 0
+                    t.reset()
+
+                now = time.monotonic()
+                if now - tqdm_last_update > 1.:
+                    t.update(testbed.training_step - old_training_step)
+                    t.set_postfix(loss=testbed.loss)
+                    old_training_step = testbed.training_step
+                    tqdm_last_update = now
+
+        err_r_max = 0
+        err_t_max = 0
+        self.frames = sorted(self.frames, key=lambda x: x.image_path)
+        for i, f in enumerate(self.frames):
+            refined_ex = testbed.nerf.get_camera_extrinsics(i)
+            print(refined_ex)
+
+            pose = np.concatenate((np.array(refined_ex), np.array([[0, 0, 0, 1]])), axis=0)
+            pose = convert_camera_pose(pose, "blender", "cv")
+
+            err = f.pose @ np.linalg.inv(pose)
+            err_r = np.arccos((np.trace(err[:3, :3]) - 1) / 2) * 180 / np.pi
+            err_t = np.linalg.norm(err[:3, 3])
+            nuwa.get_logger().debug(f"ingp ft - fine-tuned frame {i}: {err_r=:.3f}, {err_t=:.4f}")
+
+            err_r_max = max(err_r_max, err_r)
+            err_t_max = max(err_t_max, err_t)
+
+            f.pose = pose
+
+        nuwa.get_logger().info(f"ingp ft - finetune results: {err_r_max=:.3f}, {err_t_max=:.4f}")
+        self.colmap_reconstruction.update_poses_from_frames(self.frames)
+        shutil.rmtree(tmp_dump)
+
+    def _finetune_pose_old(self, ingp_binary="instant-ngp"):
         assert nuwa.is_ingp_available(), "Pose fine-tuning requires ingp, please install it following README."
 
         tmp_dump = tempfile.mkdtemp()
