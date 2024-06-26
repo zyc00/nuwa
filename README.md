@@ -14,10 +14,13 @@ nuwa (女媧／女娲, Nǚwā) is a Python library for pre-processing images and
 pip install git+https://github.com/jetd1/nuwa.git
 
 # (optional) if you want to use segmentation for object oriented scenes (--object)
-pip install rembg>=2.0.57 torch>=2.0.0 torchvision>=0.16.0 git+https://github.com/facebookresearch/segment-anything.git
+./additional_dependencies/setup_seg.sh
 
 # (optional) if you want to use `nuwat gs2mesh` to generate mesh
-pip install open3d>=0.18.0
+./additional_dependencies/setup_mesh.sh
+
+# (optional) if you want to fine-tune pose with instant-ngp
+./additional_dependencies/setup_ingp.sh
 ```
 
 🧑‍💻 CLI
@@ -134,7 +137,7 @@ Example:
 ### colmap and other sfm pipelines
 1. `colmap` could be installed with `apt install -y colmap`. This version is CPU-only. To install the GPU version, please refer to `setup_pixsfm.sh:21` or the [official colmap installation guide](https://colmap.github.io/install.html).
 2. nuwa uses colmap from system path by default. If you have a different version of colmap, you can specify the path to the colmap executable using the `--colmap-binary` argument.
-3. To use a more advanced sfm pipeline (hloc, hloc++), you need to first install the required dependencies as shown in `setup_pixsfm.sh`.
+3. To use a more advanced sfm pipeline (hloc, hloc++), you need to first install the required dependencies as shown in `additional_dependencies/setup_pixsfm.sh`.
 4. If you need the original colmap database/sparse estimation (e.g. for 3DGS pipelines), please pass `--colmap-dir` or `colmap_out_dir` explicitly. 
 
 ### App-sourced data
@@ -149,6 +152,7 @@ Example:
 2. Pass `--object` to indicate the scene needs normalization and segmentation.
 
 ## TODO
+- [ ] refloor / wireframe for better mesh
 - [ ] instant-ngp c++ api call for pose fine-tuning
 - [ ] Reorganize transformations in reconstruction
 - [ ] Improve fg masking

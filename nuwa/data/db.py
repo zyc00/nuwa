@@ -267,7 +267,9 @@ class NuwaDB:
 
         nuwa.get_logger().info(f"db norm - normalized the scene, org_ctr={tuple(offset)}, org_scale={1 / scale}")
 
-    def finetune_pose(self, ingp_binary="instant-ngp"):
+    def finetune_pose(self):
+        assert nuwa.is_ingp_available(), "Pose fine-tuning requires ingp, please install it following README."
+
         tmp_dump = tempfile.mkdtemp()
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)

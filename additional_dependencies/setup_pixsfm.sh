@@ -1,3 +1,4 @@
+# WE DO NOT RECOMMEND USING THIS SCRIPT
 # If you do not need pixsfm (most users do not need this)
 # skip this file
 

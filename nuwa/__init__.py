@@ -22,6 +22,14 @@ def is_seg_available():
         return False
 
 
+def is_ingp_available():
+    try:
+        import pyngp
+        return True
+    except ImportError:
+        return False
+
+
 def get_logger():
     return logging.getLogger("nuwa")
 

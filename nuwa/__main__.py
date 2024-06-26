@@ -31,8 +31,6 @@ def main():
 
         parser.add_argument("--finetune-pose", action="store_true",
                             help="Fine-tune pose with ingp, requiring normalized scenes")
-        parser.add_argument("--ingp-binary", type=str, default="instant-ngp",
-                            help="Path to the instant-ngp binary")
         parser.add_argument("--finetune-pose-colmap", action="store_true",
                             help="Fine-tune pose with colmap")
 
@@ -98,6 +96,9 @@ def main():
     if gen_mask:
         assert nuwa.is_seg_available(), "Segmentation is not available, please install dependencies following README."
         assert camera_model == "OPENCV" and undistort  # fix this
+    if args.finetune_pose:
+        assert nuwa.is_ingp_available(), ("ingp is required for fine-tuning pose, "
+                                          "please install dependencies following README.")
     copy_images_to = None
 
     if args.model == "colmap":
@@ -194,7 +195,7 @@ def main():
 
     if args.finetune_pose:
         db.normalize_cameras(positive_z=True, scale_factor=0.8)
-        db.finetune_pose(args.ingp_binary)
+        db.finetune_pose()
 
     if gen_mask:
         try:
@@ -209,7 +210,7 @@ def main():
             copy_images_to = None
 
             if args.finetune_pose:
-                db.finetune_pose(args.ingp_binary)
+                db.finetune_pose()
 
         except ValueError as e:
             nuwa.get_logger().warning(f"Mask generation failed: {e}")
@@ -219,7 +220,7 @@ def main():
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
         if args.finetune_pose:
-            db.finetune_pose(args.ingp_binary)
+            db.finetune_pose()
 
     elif args.finetune_pose:
         nuwa.get_logger().warning("Pose fine-tuning with ingp requires object scene or normalization.")
