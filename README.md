@@ -54,7 +54,7 @@ nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half) or `-r 1000` (for m
 
 # (nuwat is an alias for nuwa-tools)
 # To segment a image folder:
-nuwat downsample -i NUWADB_DIR -o OUT_DIR -r 2  # (for half) or `-r 1000` (for max 1000px)
+nuwat seg -i IMG_DIR -o OUT_DIR
 ```
 
 🐍 Python
