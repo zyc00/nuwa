@@ -18,7 +18,8 @@ def is_seg_available():
         import torchvision
         import nuwa.utils.seg_utils
         return True
-    except ImportError:
+    except ImportError as e:
+        get_logger().error(f"Error: {e}")
         return False
 
 
@@ -26,7 +27,8 @@ def is_ingp_available():
     try:
         import pyngp
         return True
-    except ImportError:
+    except ImportError as e:
+        get_logger().error(f"Error: {e}")
         return False
 
 

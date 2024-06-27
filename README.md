@@ -142,7 +142,7 @@ Example:
 
 ### App-sourced data
 1. `--portrait` flag is mandatory for portrait-oriented scenes captured in polycam or DEAR.
-2. If you have a rough estimate of the camera poses, you can pass `--finetune-pose` to refine the poses with instant-ngp. This requires the `instant-ngp` executable in your `PATH`.  
+2. If you have a rough estimate of the camera poses, you can pass `--finetune-pose` to refine the poses with instant-ngp. This requires you to have an instant-ngp built locally. Please follow the instructions in `additional_dependencies/setup_ingp.sh`.
 
 ### Known issues 
 1. If you encountered any issue with `flann`, try running with `--no-loop-detection` or pass `colmap_loop_detection=False`. There is likely an issue with your system kernel.
@@ -153,7 +153,7 @@ Example:
 
 ## TODO
 - [ ] refloor / wireframe for better mesh
-- [ ] instant-ngp c++ api call for pose fine-tuning
+- [ ] Adapt neuralangelo extended json format
 - [ ] Reorganize transformations in reconstruction
 - [ ] Improve fg masking
 - [ ] Clearer way to ref org, org_masked (mask), cropped_masked (mask).

@@ -8,12 +8,12 @@ sudo apt install -y build-essential git python3-dev python3-pip libopenexr-dev l
 git clone --recursive https://github.com/nvlabs/instant-ngp "$INGP_HOME"  && \
 cmake "$INGP_HOME" -B "$INGP_HOME/build" -DCMAKE_BUILD_TYPE=RelWithDebInfo  && \
 cmake --build "$INGP_HOME/build" --config RelWithDebInfo -j && \
-echo "export PYTHONPATH=\$PYTHONPATH:$INGP_HOME/build" >> "$HOME/.bashrc" && \
-#echo "export PYTHONPATH=\$PYTHONPATH:$INGP_HOME/build" >> "$HOME/.zshrc" && \
-echo "ingp binary path: $INGP_HOME/instant-ngp" && \
-source "$HOME/.bashrc"
-#source "$HOME/.zshrc"
+echo "ingp home path: $INGP_HOME" && \
 
 # test
-echo "Testing if python binding is installed successfully..."
+echo "Testing if python binding is installed successfully..." && \
 python -c "import pyngp"
+
+# conda install -c conda-forge libstdcxx-ng=12    # If met problem with libstdc++, uncomment this line.
+
+

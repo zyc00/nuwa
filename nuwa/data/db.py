@@ -5,7 +5,8 @@ import tempfile
 from copy import deepcopy
 from typing import List
 
-import cv2
+import sys
+import time
 import numpy as np
 import tqdm
 from PIL import Image
@@ -267,31 +268,31 @@ class NuwaDB:
 
         nuwa.get_logger().info(f"db norm - normalized the scene, org_ctr={tuple(offset)}, org_scale={1 / scale}")
 
-    def finetune_pose(self, near=-1.0, n_steps=10000):
+    def finetune_pose(self, ingp_home, near=-1.0, n_steps=4000):
+        ingp_home = os.path.expanduser(ingp_home)
+        sys.path.append(os.path.join(ingp_home, "build"))
         assert nuwa.is_ingp_available(), "Pose fine-tuning requires ingp, please install it following README."
+        import pyngp as ingp
 
         tmp_dump = tempfile.mkdtemp()
         tmp_json = os.path.join(tmp_dump, "nuwa_db.json")
         self.dump(tmp_json)
 
-        import pyngp as ingp
-
         testbed = ingp.Testbed()
         testbed.root_dir = tmp_dump
         testbed.load_file(tmp_json)
-        # testbed.load_training_data(tmp_json)
-        testbed.nerf.optimize_extrinsics = True
-        # testbed.nerf.optimize_exposure = True
-        testbed.nerf.random_bg_color = True
+        testbed.load_file(os.path.join(ingp_home, "configs/nerf/base.json"))
+        testbed.nerf.training.optimize_extrinsics = True
+        # testbed.nerf.training.optimize_exposure = True
+        testbed.nerf.training.random_bg_color = True
         testbed.nerf.render_with_lens_distortion = True
-        if args.near_distance >= 0.0:
-            nuwa.get_logger().info(f"ingp ft - ray {near=}")
+        if near >= 0.0:
             testbed.nerf.training.near_distance = near
         testbed.shall_train = True
 
         old_training_step = 0
         tqdm_last_update = 0
-        with tqdm(desc="Training", total=n_steps, unit="steps") as t:
+        with tqdm.tqdm(desc="INFO - ingp ft - fine-tuning", total=n_steps) as t:
             while testbed.frame():
                 if testbed.training_step >= n_steps:
                     break
@@ -307,13 +308,10 @@ class NuwaDB:
                     old_training_step = testbed.training_step
                     tqdm_last_update = now
 
-        err_r_max = 0
-        err_t_max = 0
+        err_r_max, err_t_max = 0., 0.
         self.frames = sorted(self.frames, key=lambda x: x.image_path)
         for i, f in enumerate(self.frames):
-            refined_ex = testbed.nerf.get_camera_extrinsics(i)
-            print(refined_ex)
-
+            refined_ex = testbed.nerf.training.get_camera_extrinsics(i)
             pose = np.concatenate((np.array(refined_ex), np.array([[0, 0, 0, 1]])), axis=0)
             pose = convert_camera_pose(pose, "blender", "cv")
 
@@ -328,6 +326,9 @@ class NuwaDB:
             f.pose = pose
 
         nuwa.get_logger().info(f"ingp ft - finetune results: {err_r_max=:.3f}, {err_t_max=:.4f}")
+        if err_r_max > 2.0 or err_t_max > 0.1:
+            nuwa.get_logger().warning(f"ingp ft - large errors detected, please check the results manually...")
+
         self.colmap_reconstruction.update_poses_from_frames(self.frames)
         shutil.rmtree(tmp_dump)
 

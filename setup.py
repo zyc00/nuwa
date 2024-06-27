@@ -12,7 +12,7 @@ setup(
         'opencv_python>=4.9.0.80',
         'pillow>=10.3.0',
         'matplotlib>=3.8.0',
-        'numpy>=1.22',
+        'numpy<2',
         'tqdm>=4.0.0',
         'easydict>=1.0',
         'plyfile>=1.0.3',

@@ -33,6 +33,8 @@ def main():
                             help="Fine-tune pose with ingp, requiring normalized scenes")
         parser.add_argument("--finetune-pose-colmap", action="store_true",
                             help="Fine-tune pose with colmap")
+        parser.add_argument("--ingp-home", type=str, default="~/.cache/nuwa/ingp",
+                            help="Path to the ingp home directory (repo dir)")
 
         parser.add_argument("--normalize", action="store_true",
                             help="Normalize cameras into (-1, 1)")
@@ -74,6 +76,10 @@ def main():
         return parser.parse_args()
 
     args = get_args()
+
+    ingp_home = os.path.expanduser(args.ingp_home)
+    assert os.path.exists(os.path.join(ingp_home, "build")), "ingp is not built, please follow the installation guide."
+    sys.path.append(os.path.join(ingp_home, "build"))
 
     if args.verbose:
         nuwa.set_log_level(nuwa.logging.DEBUG)
@@ -195,7 +201,7 @@ def main():
 
     if args.finetune_pose:
         db.normalize_cameras(positive_z=True, scale_factor=0.8)
-        db.finetune_pose()
+        db.finetune_pose(ingp_home=ingp_home)
 
     if gen_mask:
         try:
@@ -210,7 +216,7 @@ def main():
             copy_images_to = None
 
             if args.finetune_pose:
-                db.finetune_pose()
+                db.finetune_pose(ingp_home=ingp_home)
 
         except ValueError as e:
             nuwa.get_logger().warning(f"Mask generation failed: {e}")
@@ -220,7 +226,7 @@ def main():
     elif args.normalize:
         db.normalize_cameras(positive_z=True, scale_factor=args.normalize_scale_factor)
         if args.finetune_pose:
-            db.finetune_pose()
+            db.finetune_pose(ingp_home=ingp_home)
 
     elif args.finetune_pose:
         nuwa.get_logger().warning("Pose fine-tuning with ingp requires object scene or normalization.")
