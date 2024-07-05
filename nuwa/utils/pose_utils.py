@@ -2,7 +2,7 @@ import numpy as np
 
 
 def convert_camera_pose(pose, in_type, out_type):
-    accepted_types = ["cv", "gl", "blender"]
+    accepted_types = ["cv", "gl", "blender", "ros"]
 
     assert in_type in accepted_types, f"Input type {in_type} not in {accepted_types}"
     assert out_type in accepted_types, f"Output type {out_type} not in {accepted_types}"
@@ -15,14 +15,26 @@ def convert_camera_pose(pose, in_type, out_type):
     if in_type == out_type:
         return pose
 
-    return pose @ np.array(
-        [
-            [1, 0, 0, 0],
-            [0, -1, 0, 0],
-            [0, 0, -1, 0],
-            [0, 0, 0, 1],
-        ]
-    )
+    if (in_type == "cv" and out_type == "gl") or (in_type == "gl" and out_type == "cv"):
+        return pose @ np.array(
+            [
+                [1, 0, 0, 0],
+                [0, -1, 0, 0],
+                [0, 0, -1, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+    elif in_type == "ros" and out_type == "cv":
+        return pose @ np.array(
+            [
+                [0, 0, 1, 0],
+                [-1, 0, 0, 0],
+                [0, -1, 0, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+    else:
+        raise NotImplementedError(f"Conversion from {in_type} -> {out_type} is not implemented!")
 
 
 def qvec2rotmat(qvec):

@@ -81,7 +81,7 @@ Example:
 
 ```python
 {
-  "source": "colmap",                      # source of the data, choices [colmap, arkit]
+  "source": "colmap",                      # source of the data, choices [colmap, arkit, sim]
   
   "up": [                                  # (Optional) up vector of the scene
     0.018489610893192888,

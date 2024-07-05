@@ -4,7 +4,10 @@ import argparse
 import tempfile
 
 import nuwa
-from nuwa import from_image_folder, from_video, from_polycam, from_3dscannerapp, from_nuwadb, from_dear
+from nuwa import (
+    from_image_folder, from_video,
+    from_polycam, from_3dscannerapp, from_nuwadb, from_dear, from_haoyang
+)
 
 
 def main():
@@ -20,6 +23,8 @@ def main():
                             help="Path to the 3dscannerapp dir or zip")
         parser.add_argument("--dear-path", "-d", type=str, default="",
                             help="Path to the DEAR dir or zip")
+        parser.add_argument("--haoyang-path", "-H", type=str, default="",
+                            help="Path to the Haoyang data dir or zip")
         parser.add_argument("--out-dir", "-o", type=str, default="./nuwa_results",
                             help="Output directory")
 
@@ -121,7 +126,7 @@ def main():
 
     hloc_max_keypoints = args.hloc_max_keypoints
 
-    if args.polycam_path or args.scannerapp_path or args.dear_path:
+    if args.polycam_path or args.scannerapp_path or args.dear_path or args.haoyang_path:
         image_out_dir = os.path.join(out_dir, "images") \
             if args.image_dir == "" else args.image_dir
 
@@ -138,13 +143,18 @@ def main():
                 args.scannerapp_path,
                 image_out_dir
             )
-        else:
+        elif args.dear_path:
             db = from_dear(
                 args.dear_path,
                 image_out_dir,
                 args.portrait,
                 args.dear_sample_stride
             )
+        else:
+            db = from_haoyang(
+                args.haoyang_path
+            )
+            copy_images_to = os.path.join(out_dir, "images")
 
         if args.finetune_pose_colmap:
             db.finetune_pose_colmap(

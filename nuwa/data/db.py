@@ -33,14 +33,14 @@ class NuwaDB:
         if self.source == "polycam":
             nuwa.get_logger().warning("'polycam' source tag is deprecated, please use 'arkit' instead.")
         else:
-            assert self.source in ["arkit", "colmap"], f"Unknown data source {self.source}."
+            assert self.source in ["arkit", "colmap", "sim"], f"Unknown data source {self.source}."
 
         self.frames = [] if frames is None else frames
         self.colmap_reconstruction = deepcopy(colmap_reconstruction)
         self.scale_denorm = scale_denorm
 
         if z_up is None:
-            self.z_up = self.source in ["arkit", "polycam"]
+            self.z_up = self.source in ["arkit", "polycam", "sim"]
         else:
             self.z_up = z_up
 

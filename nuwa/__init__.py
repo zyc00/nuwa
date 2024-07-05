@@ -3,6 +3,7 @@ from nuwa.data.db_loader import (
     from_polycam,
     from_3dscannerapp,
     from_dear,
+    from_haoyang,
     from_nuwadb,
     from_image_folder,
     from_video
@@ -110,6 +111,7 @@ __all__ = [
     "from_polycam",
     "from_3dscannerapp",
     "from_dear",
+    "from_haoyang",
     "from_nuwadb",
     "from_image_folder",
     "from_video",

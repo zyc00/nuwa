@@ -16,7 +16,8 @@ from nuwa.utils.colmap_utils import run_colmap, run_hloc, colmap_convert_model, 
 from nuwa.utils.floor_utils import get_upright_transformation
 from nuwa.utils.image_utils import center_crop_and_update_intrinsics, sharpness
 from nuwa.utils.os_utils import do_system, run_ffmpeg
-from nuwa.utils.pose_utils import rt2pose, qt2pose, rotx_np, rotz_np, convert_camera_pose, get_rot90_camera_matrices
+from nuwa.utils.pose_utils import rt2pose, qt2pose, rotx_np, rotz_np, convert_camera_pose, get_rot90_camera_matrices, \
+    qvec2rotmat
 
 
 def from_reconstruction(
@@ -388,6 +389,52 @@ def from_dear(
 
     return NuwaDB(
         source="arkit",
+        frames=frames,
+        colmap_reconstruction=Reconstruction.from_frames(frames),
+        z_up=True
+    )
+
+
+def from_haoyang(file_path):
+    if file_path.endswith(".zip"):
+        import zipfile
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            file_path = tempfile.mkdtemp()
+            zip_ref.extractall(file_path)
+
+    img_dir = os.path.join(file_path, "input")
+    assert os.path.exists(img_dir), f"Directory {img_dir} does not exist"
+
+    camera_info = json.load(open(os.path.join(file_path, "camera_poses.json")))
+
+    frames = []
+    for info in camera_info:
+        img_id = info["id"]
+        image_path = os.path.join(img_dir, f"{img_id:04d}.png")
+        assert os.path.exists(image_path), f"Image {image_path} does not exist"
+
+        w, h = info["width"], info["height"]
+        intrinsic = info["intrinsic"]
+        extrinsic = info["extrinsic"]
+
+        camera = PinholeCamera(w, h, intrinsic[0][0], intrinsic[1][1], intrinsic[0][2], intrinsic[1][2])
+        p, q = extrinsic['p'], extrinsic['q']
+        pose = convert_camera_pose(rt2pose(qvec2rotmat(q), p), "ros", "cv")
+
+        frame = Frame(
+            camera=camera,
+            image_path=image_path,
+            org_path=image_path,
+            pose=pose,
+            seq_id=img_id,
+            sharpness_score=500.0  # TODO: is this always good?
+        )
+        frames.append(frame)
+
+    frames = sorted(frames, key=lambda x: x.image_path)
+
+    return NuwaDB(
+        source="sim",
         frames=frames,
         colmap_reconstruction=Reconstruction.from_frames(frames),
         z_up=True
