@@ -82,15 +82,16 @@ def main():
 
     args = get_args()
 
-    ingp_home = os.path.expanduser(args.ingp_home)
-    assert os.path.exists(os.path.join(ingp_home, "build")), "ingp is not built, please follow the installation guide."
-    sys.path.append(os.path.join(ingp_home, "build"))
-
     if args.verbose:
         nuwa.set_log_level(nuwa.logging.DEBUG)
         nuwa.get_logger().warning("`--verbose` flag is deprecated, use `-l DEBUG` instead")
     else:
         nuwa.set_log_level(nuwa.logging.getLevelName(args.log_level))
+
+    if args.finetune_pose:
+        ingp_home = os.path.expanduser(args.ingp_home)
+        assert os.path.exists(os.path.join(ingp_home, "build")), "ingp is not built, please follow the installation guide."
+        sys.path.append(os.path.join(ingp_home, "build"))
 
     out_dir = args.out_dir
     if os.path.exists(out_dir):
