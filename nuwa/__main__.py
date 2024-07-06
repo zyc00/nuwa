@@ -90,8 +90,11 @@ def main():
 
     if args.finetune_pose:
         ingp_home = os.path.expanduser(args.ingp_home)
-        assert os.path.exists(os.path.join(ingp_home, "build")), "ingp is not built, please follow the installation guide."
+        assert os.path.exists(os.path.join(ingp_home, "build")), ("ingp is not built, "
+                                                                  "please follow the installation guide.")
         sys.path.append(os.path.join(ingp_home, "build"))
+        assert nuwa.is_ingp_available(), ("ingp is required for fine-tuning pose, "
+                                          "please install dependencies following README.")
 
     out_dir = args.out_dir
     if os.path.exists(out_dir):
@@ -108,9 +111,6 @@ def main():
     if gen_mask:
         assert nuwa.is_seg_available(), "Segmentation is not available, please install dependencies following README."
         assert camera_model == "OPENCV" and undistort  # fix this
-    if args.finetune_pose:
-        assert nuwa.is_ingp_available(), ("ingp is required for fine-tuning pose, "
-                                          "please install dependencies following README.")
     copy_images_to = None
 
     if args.model == "colmap":

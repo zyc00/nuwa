@@ -403,7 +403,13 @@ def from_haoyang(file_path):
             zip_ref.extractall(file_path)
 
     img_dir = os.path.join(file_path, "input")
-    assert os.path.exists(img_dir), f"Directory {img_dir} does not exist"
+    if not os.path.exists(img_dir):
+        if len(os.listdir(file_path)) == 1:
+            file_path = os.path.join(file_path, os.listdir(file_path)[0])
+            img_dir = os.path.join(file_path, "input")
+            assert os.path.exists(img_dir), f"Image directory {img_dir} does not exist!"
+        else:
+            raise ValueError(f"Multiple directories found in {file_path}!")
 
     camera_info = json.load(open(os.path.join(file_path, "camera_poses.json")))
 
