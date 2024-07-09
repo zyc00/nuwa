@@ -145,6 +145,7 @@ class NuwaDB:
             shrink=0.02,
             sam_ckpt_path=None,
             use_flow=True,
+            use_tracking=True,
             adjust_cameras=True,
             copy_org=True
     ):
@@ -178,6 +179,7 @@ class NuwaDB:
         images, masks = segment_fg(
             org_images,
             use_flow=use_flow,
+            use_tracking=use_tracking,
             sam_ckpt_path=sam_ckpt_path,
             reduce_factor=reduce_factor,
             shrink=shrink,

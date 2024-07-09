@@ -69,6 +69,8 @@ def main():
                             help="Object scene, will generate object masks and normalize the scene into (-1, 1)")
         parser.add_argument("--no-flow", action="store_true",
                             help="Do not use flow when segmenting images")
+        parser.add_argument("--no-tracking", action="store_true",
+                            help="Do not use tracking when segmenting images")
         parser.add_argument("--no-undistort", action="store_true",
                             help="Do not undistort images")
 
@@ -221,7 +223,8 @@ def main():
                 os.path.join(out_dir, "images"),
                 adjust_cameras=True,
                 copy_org=True,
-                use_flow=not args.no_flow
+                use_flow=not args.no_flow,
+                use_tracking=not args.no_tracking
             )
 
             copy_images_to = None
@@ -366,6 +369,7 @@ def seg(args):
     input_dir = args.input_dir
     output_dir = args.output_dir
     use_flow = not args.no_flow
+    use_tracking = not args.no_tracking
     reduce_factor = args.flow_reduce_factor
     sam_ckpt_path = args.sam_ckpt_path
     shrink = 0.02
@@ -375,6 +379,7 @@ def seg(args):
     images, masks = segment_fg(
         [Image.open(f) for f in image_paths],
         use_flow=use_flow,
+        use_tracking=use_tracking,
         sam_ckpt_path=sam_ckpt_path,
         reduce_factor=reduce_factor,
         shrink=shrink
@@ -438,6 +443,8 @@ def tools():
                             help="Path to the output folder")
     seg_parser.add_argument("--no-flow", "-n", action="store_true",
                             help="Do not use flow to track the fg. Use this for non-sequential captures.")
+    seg_parser.add_argument("--no-tracking", action="store_true",
+                            help="Do not use tracking when segmenting images")
     seg_parser.add_argument("--flow-reduce-factor", "-r", type=int, default=2,
                             help="Downsample factor for computing flow.")
     seg_parser.add_argument("--sam-ckpt-path", type=str, default=None,

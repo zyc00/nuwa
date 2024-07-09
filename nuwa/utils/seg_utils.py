@@ -14,10 +14,15 @@ try:
     import torch
     from rembg import new_session, remove
     from segment_anything import sam_model_registry, SamPredictor
+    from nuwa.utils.cutie_utils import get_default_model_for_cutie
+    from cutie.inference.inference_core import InferenceCore
+    from torchvision.transforms.functional import to_tensor
 except ImportError:
-    nuwa.get_logger().error("Please install rembg and segment_anything for processing objects:"
-                            '`pip install "rembg>=2.0.57" "torch>=2.0.0" "torchvision>=0.16.0" '
-                            'git+https://github.com/facebookresearch/segment-anything.git`')
+    nuwa.get_logger().error(
+        "Please install rembg and segment_anything for processing objects:"
+        '`pip install "rembg>=2.0.57" "torch>=2.0.0" "torchvision>=0.16.0" '
+        "git+https://github.com/facebookresearch/segment-anything.git`"
+    )
     raise
 
 import matplotlib.pyplot as plt
@@ -53,25 +58,26 @@ def findContours(*args, **kwargs):
     Returns:
         contours, hierarchy
     """
-    if cv2.__version__.startswith('4'):
+    if cv2.__version__.startswith("4"):
         contours, hierarchy = cv2.findContours(*args, **kwargs)
-    elif cv2.__version__.startswith('3'):
+    elif cv2.__version__.startswith("3"):
         _, contours, hierarchy = cv2.findContours(*args, **kwargs)
     else:
-        raise AssertionError(
-            'cv2 must be either version 3 or 4 to call this method')
+        raise AssertionError("cv2 must be either version 3 or 4 to call this method")
 
     return contours, hierarchy
 
 
-def vis_mask(img,
-             mask,
-             color=[255, 255, 255],
-             alpha=0.4,
-             show_border=True,
-             border_alpha=0.5,
-             border_thick=1,
-             border_color=None):
+def vis_mask(
+    img,
+    mask,
+    color=[255, 255, 255],
+    alpha=0.4,
+    show_border=True,
+    border_alpha=0.5,
+    border_thick=1,
+    border_color=None,
+):
     """
     Visualizes a single binary mask.
     :param img: H,W,3, uint8, np.ndarray
@@ -93,7 +99,8 @@ def vis_mask(img,
 
     if show_border:
         contours, _ = findContours(
-            mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+        )
         # contours = [c for c in contours if c.shape[0] > 10]
         if border_color is None:
             border_color = color
@@ -101,22 +108,26 @@ def vis_mask(img,
             border_color = border_color.tolist()
         if border_alpha < 1:
             with_border = img.copy()
-            cv2.drawContours(with_border, contours, -1, border_color,
-                             border_thick, cv2.LINE_AA)
+            cv2.drawContours(
+                with_border, contours, -1, border_color, border_thick, cv2.LINE_AA
+            )
             img = (1 - border_alpha) * img + border_alpha * with_border
         else:
-            cv2.drawContours(img, contours, -1, border_color, border_thick,
-                             cv2.LINE_AA)
+            cv2.drawContours(img, contours, -1, border_color, border_thick, cv2.LINE_AA)
 
     return img.astype(np.uint8)
 
 
 @torch.no_grad()
-def generate_grid(n_vox, interval, dtype=torch.float32, device='cuda'):
+def generate_grid(n_vox, interval, dtype=torch.float32, device="cuda"):
     # global grid_
     # if grid_ is None:
-    grid_range = [torch.arange(0, n_vox[axis], interval, device=device) for axis in range(3)]
-    grid = torch.stack(torch.meshgrid(grid_range[0], grid_range[1], grid_range[2], indexing='ij'))
+    grid_range = [
+        torch.arange(0, n_vox[axis], interval, device=device) for axis in range(3)
+    ]
+    grid = torch.stack(
+        torch.meshgrid(grid_range[0], grid_range[1], grid_range[2], indexing="ij")
+    )
     grid = grid.unsqueeze(0).to(dtype=dtype)  # 1 3 dx dy dz
     grid = grid.view(1, 3, -1)
     grid_ = grid
@@ -139,16 +150,23 @@ def scene_carving(masks, Ks, camera_poses):
     origin = np.array([-1, -1, -1])
     voxel_size = 2 / 64
     pts = coords * voxel_size + origin
-    occ = np.zeros((64 ** 3), dtype=np.uint8)
+    occ = np.zeros((64**3), dtype=np.uint8)
     for i in range(len(masks)):
         pts_cam = utils_3d.transform_points(pts, np.linalg.inv(camera_poses[i]))
         pts_img = utils_3d.rect_to_img(Ks[i], pts_cam)
         ys = pts_img[:, 1].astype(int).clip(0, masks.shape[1] - 1)
         xs = pts_img[:, 0].astype(int).clip(0, masks.shape[2] - 1)
 
-        valid = np.logical_and.reduce([pts_img[:, 0] >= 0, pts_img[:, 0] < masks.shape[2],
-                                       pts_img[:, 1] >= 0, pts_img[:, 1] < masks.shape[1],
-                                       pts_cam[:, 2] > 0, masks[i][ys, xs]])
+        valid = np.logical_and.reduce(
+            [
+                pts_img[:, 0] >= 0,
+                pts_img[:, 0] < masks.shape[2],
+                pts_img[:, 1] >= 0,
+                pts_img[:, 1] < masks.shape[1],
+                pts_cam[:, 2] > 0,
+                masks[i][ys, xs],
+            ]
+        )
         occ += valid
         # wis3d.add_point_cloud(pts[valid])
         # print()
@@ -250,9 +268,11 @@ class SAMAPI:
             if sam_checkpoint is None:
                 sam_checkpoint = default_ckpt_path
             if not osp.exists(sam_checkpoint):
-                os.system(f'wget '
-                          f'-O {default_ckpt_path} '
-                          f'https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth ')
+                os.system(
+                    f"wget "
+                    f"-O {default_ckpt_path} "
+                    f"https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth "
+                )
             device = "cuda"
             model_type = "default"
 
@@ -264,10 +284,15 @@ class SAMAPI:
         return SAMAPI.predictor
 
     @staticmethod
-    def segment_api(rgb, mask=None, bbox=None,
-                    point_coords=None, point_labels=None,
-                    sam_checkpoint=None,
-                    dbg=False):
+    def segment_api(
+        rgb,
+        mask=None,
+        bbox=None,
+        point_coords=None,
+        point_labels=None,
+        sam_checkpoint=None,
+        dbg=False,
+    ):
         """
 
         Parameters
@@ -287,8 +312,12 @@ class SAMAPI:
         else:
             # mask to bbox
             if bbox is None:
-                y1, y2, x1, x2 = np.nonzero(mask)[0].min(), np.nonzero(mask)[0].max(), np.nonzero(mask)[1].min(), \
-                                 np.nonzero(mask)[1].max()
+                y1, y2, x1, x2 = (
+                    np.nonzero(mask)[0].min(),
+                    np.nonzero(mask)[0].max(),
+                    np.nonzero(mask)[1].min(),
+                    np.nonzero(mask)[1].max(),
+                )
             else:
                 x1, y1, x2, y2 = bbox
             box_input = np.array([[x1, y1, x2, y2]])
@@ -305,10 +334,24 @@ class SAMAPI:
             plt.subplot(1, 2, 1)
             plt.imshow(rgb)
             if box_input is not None:
-                plt.gca().add_patch(plt.Rectangle((x1, y1), x2 - x1, y2 - y1, fill=False, edgecolor='r', linewidth=3))
+                plt.gca().add_patch(
+                    plt.Rectangle(
+                        (x1, y1),
+                        x2 - x1,
+                        y2 - y1,
+                        fill=False,
+                        edgecolor="r",
+                        linewidth=3,
+                    )
+                )
             if point_coords is not None:
                 for i in range(len(point_coords)):
-                    plt.scatter(point_coords[i, 0], point_coords[i, 1], c='g' if point_labels[i] == 1 else 'r', s=2)
+                    plt.scatter(
+                        point_coords[i, 0],
+                        point_coords[i, 1],
+                        c="g" if point_labels[i] == 1 else "r",
+                        s=2,
+                    )
             plt.subplot(1, 2, 2)
             plt.title("sam output")
             plt.imshow(vis_mask(rgb, mask.astype(np.uint8), [0, 255, 0]))
@@ -316,29 +359,55 @@ class SAMAPI:
         return mask
 
 
+@torch.inference_mode()
 def segment_fg(
-        images: List[Image.Image],
-        use_flow=True,
-        sam_ckpt_path=None,
-        reduce_factor=2,
-        shrink=0.02,
+    images: List[Image.Image],
+    use_flow=True,
+    use_tracking=True,
+    sam_ckpt_path=None,
+    reduce_factor=2,
+    shrink=0.02,
 ):
     new_images = []
     masks = []
 
-    nuwa.get_logger().info(f"nseg - starting to generate masks for {len(images)} frames, {use_flow=}")
-    for i in tqdm.trange(len(images), desc='masking'):
+    nuwa.get_logger().info(
+        f"nseg - starting to generate masks for {len(images)} frames, {use_flow=}"
+    )
+
+    if use_tracking:
+        cutie = get_default_model_for_cutie()
+        processor = InferenceCore(cutie, cfg=cutie.cfg)
+        processor.max_internal_size = 768
+
+    for i in tqdm.trange(len(images), desc="masking"):
         img = images[i]
 
-        if (not use_flow) or i == 0:
+        if ((not use_flow) and (not use_tracking)) or i == 0:
             _, rembg_mask = segment_img(img)
             _, mask = sam(img, rembg_mask)
-        else:
+
+            if use_tracking:
+                img_tensor = to_tensor(img).cuda().float()
+                mask_tensor = to_tensor(mask).cuda().float()
+                objects = np.unique(mask)
+                objects = objects[objects != 0].tolist()
+                output_prob = processor.step(img_tensor, mask_tensor[0], objects)
+                mask = processor.output_prob_to_mask(output_prob)
+                mask = mask.cpu().numpy().astype(bool)
+
+        elif not use_tracking:
             flow_rgb_img0 = images[i - 1].reduce(reduce_factor)
             flow_rgb_img1 = img.reduce(reduce_factor)
-            flow = raft_api.raft_optical_flow_api(flow_rgb_img0, flow_rgb_img1).cpu().numpy()
+            flow = (
+                raft_api.raft_optical_flow_api(flow_rgb_img0, flow_rgb_img1)
+                .cpu()
+                .numpy()
+            )
 
-            ref_mask = Image.fromarray(masks[i - 1].astype(np.uint8)).reduce(reduce_factor)
+            ref_mask = Image.fromarray(masks[i - 1].astype(np.uint8)).reduce(
+                reduce_factor
+            )
             ref_mask = np.array(ref_mask) > 0
 
             ys, xs = ref_mask.nonzero()
@@ -354,15 +423,26 @@ def segment_fg(
             ymax = int(ymax + h * shrink)
             bbox = xmin, ymin, xmax, ymax
             bbox = [int(x * reduce_factor) for x in bbox]
-            mask = SAMAPI.segment_api(np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path)
-            retval, labels, stats, cent = cv2.connectedComponentsWithStats(mask.astype(np.uint8))
+            mask = SAMAPI.segment_api(
+                np.array(img), bbox=bbox, sam_checkpoint=sam_ckpt_path
+            )
+            retval, labels, stats, cent = cv2.connectedComponentsWithStats(
+                mask.astype(np.uint8)
+            )
             try:
                 maxcomp = np.argmax(stats[1:, 4]) + 1
-                mask = (labels == maxcomp)
+                mask = labels == maxcomp
             except ValueError:
-                nuwa.get_logger().warning(f"nseg - fail to process image {i}, no object found...")
+                nuwa.get_logger().warning(
+                    f"nseg - fail to process image {i}, no object found..."
+                )
                 _, rembg_mask = segment_img(img)
                 _, mask = sam(img, rembg_mask)
+        else:
+            img_tensor = to_tensor(img).cuda().float()
+            output_prob = processor.step(img_tensor)
+            mask = processor.output_prob_to_mask(output_prob)
+            mask = mask.cpu().numpy().astype(bool)
 
         new_images.append(np.array(img))
         masks.append(mask)
